@@ -1,0 +1,4 @@
+.vs/
+Temporary/
+Run/*.exe
+!Run/SimpleMiner_Release_x64.exe
