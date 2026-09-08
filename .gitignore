@@ -1,0 +1,10 @@
+.vs/
+Temporary/
+Run/*.exe
+!Run/ReSTIR_Release_x64.exe
+
+Run/Data/Shaders/*.cso
+Run/Data/Shaders/*.pdb
+Run/Data/Shaders/Compiled/
+Run/Data/Shaders/PDBs/
+Run/VenepallyChanukya_Presentation_Final.pptx

@@ -1,0 +1,12 @@
+<GameConfig	
+	windowAspect ="2.0"
+	playerMoveSpeed ="4.0"
+    windowTitle ="SimpleMiner - Foundation"
+    isFullscreen ="true"
+	playerSpawnPosition ="-53.0,75.0,171.0"
+	playerSpawnOrientation ="45,45,0"
+	playerMaxSpeed ="10.0"
+	playerHeight ="1.8"
+	playerWidth ="0.6"
+	playerEyeHeight ="1.65"
+/>

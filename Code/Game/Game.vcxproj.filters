@@ -1,0 +1,199 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Framework">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Gameplay">
+      <UniqueIdentifier>{7d42a3cc-7970-4af4-becf-8b1f9b586038}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Data">
+      <UniqueIdentifier>{727af5ee-d5b6-4b5b-9ab9-9a9e485aa4c2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Data\Shaders">
+      <UniqueIdentifier>{b542ce09-f3ca-44f3-83a2-c17089b079c5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Data\Textures">
+      <UniqueIdentifier>{e3603d5c-55cb-442f-abb0-db4fda93b966}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Data\XML Files">
+      <UniqueIdentifier>{0bf5843d-cecd-4aba-bb0e-ac9368dce2df}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Data\Meshes">
+      <UniqueIdentifier>{86e2f285-3d58-4140-9fd9-2a2f0159a784}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Jobs">
+      <UniqueIdentifier>{49a20a06-9866-4f88-a4dd-4f38c6716fb0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\World">
+      <UniqueIdentifier>{e977a099-e087-4bcf-b35c-898c4878abfa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Entity">
+      <UniqueIdentifier>{90d500da-6872-4aa2-b872-154b8c23e875}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="App.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="Main_Windows.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="Game.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="GameCommon.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="Block.cpp">
+      <Filter>Gameplay\World</Filter>
+    </ClCompile>
+    <ClCompile Include="BlockDefinition.cpp">
+      <Filter>Gameplay\World</Filter>
+    </ClCompile>
+    <ClCompile Include="BlockIterator.cpp">
+      <Filter>Gameplay\World</Filter>
+    </ClCompile>
+    <ClCompile Include="Chunk.cpp">
+      <Filter>Gameplay\World</Filter>
+    </ClCompile>
+    <ClCompile Include="World.cpp">
+      <Filter>Gameplay\World</Filter>
+    </ClCompile>
+    <ClCompile Include="GenerateChunkJob.cpp">
+      <Filter>Jobs</Filter>
+    </ClCompile>
+    <ClCompile Include="LoadChunkJob.cpp">
+      <Filter>Jobs</Filter>
+    </ClCompile>
+    <ClCompile Include="SaveChunkJob.cpp">
+      <Filter>Jobs</Filter>
+    </ClCompile>
+    <ClCompile Include="GameRaycastResult3D.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity.cpp">
+      <Filter>Gameplay\Entity</Filter>
+    </ClCompile>
+    <ClCompile Include="GameCamera.cpp">
+      <Filter>Gameplay\Entity</Filter>
+    </ClCompile>
+    <ClCompile Include="Player.cpp">
+      <Filter>Gameplay\Entity</Filter>
+    </ClCompile>
+    <ClCompile Include="Inventory.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="App.hpp">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="Game.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="GameCommon.hpp">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="EngineBuildPreferences.hpp">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="ChunkSaveFile.hpp">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="Block.hpp">
+      <Filter>Gameplay\World</Filter>
+    </ClInclude>
+    <ClInclude Include="BlockDefinition.hpp">
+      <Filter>Gameplay\World</Filter>
+    </ClInclude>
+    <ClInclude Include="BlockIterator.hpp">
+      <Filter>Gameplay\World</Filter>
+    </ClInclude>
+    <ClInclude Include="Chunk.hpp">
+      <Filter>Gameplay\World</Filter>
+    </ClInclude>
+    <ClInclude Include="World.hpp">
+      <Filter>Gameplay\World</Filter>
+    </ClInclude>
+    <ClInclude Include="GenerateChunkJob.hpp">
+      <Filter>Jobs</Filter>
+    </ClInclude>
+    <ClInclude Include="LoadChunkJob.hpp">
+      <Filter>Jobs</Filter>
+    </ClInclude>
+    <ClInclude Include="SaveChunkJob.hpp">
+      <Filter>Jobs</Filter>
+    </ClInclude>
+    <ClInclude Include="GameRaycastResult3D.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity.hpp">
+      <Filter>Gameplay\Entity</Filter>
+    </ClInclude>
+    <ClInclude Include="GameCamera.hpp">
+      <Filter>Gameplay\Entity</Filter>
+    </ClInclude>
+    <ClInclude Include="Player.hpp">
+      <Filter>Gameplay\Entity</Filter>
+    </ClInclude>
+    <ClInclude Include="Inventory.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Xml Include="..\..\Run\Data\GameConfig.xml">
+      <Filter>Data\XML Files</Filter>
+    </Xml>
+    <Xml Include="..\..\Run\Data\Definitions\BlockDefinitions.xml">
+      <Filter>Data\XML Files</Filter>
+    </Xml>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="..\..\Run\Data\Shaders\Diffuse.hlsl">
+      <Filter>Data\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Shaders\WorldShader.hlsl">
+      <Filter>Data\Shaders</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\..\Run\Data\Images\BlockSpriteSheet_32px.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\BlockSpriteSheet_128px.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\BlockSpriteSheet_Classic_Faithful_32x.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\BlockSpriteSheet_Classic_Squirrel_32x.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\BlockSpriteSheet_Dokucraft_32px.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\BlockSpriteSheet_HD_128px.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\SpriteSheet_Classic_Faithful_32x.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\SpriteSheet_Dokucraft_High_32px.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\SpriteSheet_Dokucraft_Light_32px.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\SpriteSheet_Faithful_32x.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\SpriteSheet_Faithful_64x.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+    <Image Include="..\..\Run\Data\Images\SpriteSheet_Squirrel_32x.png">
+      <Filter>Data\Textures</Filter>
+    </Image>
+  </ItemGroup>
+</Project>
