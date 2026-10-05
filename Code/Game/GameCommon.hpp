@@ -92,12 +92,20 @@ constexpr int BLOCKS_PER_CHUNK = CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
 	constexpr int MAX_GENERATE_JOBS = 10;
 	constexpr int MAX_SAVE_JOBS = 6;
 	constexpr int MAX_LOAD_JOBS = 6;
-	constexpr int MAX_CHUNK_MESHES_TO_BUILD = 1;
+	constexpr int MAX_CHUNK_MESHES_TO_BUILD = 2;
+	constexpr int MAX_CHUNKS_TO_ACTIVATE = 2;
+	constexpr int MAX_CHUNKS_TO_DEACTIVATE = 4;
+	constexpr int MAX_DIRTY_LIGHT_BLOCKS_PER_FRAME = 4096;
+	constexpr int MAX_DIRTY_LIGHT_BACKLOG = 8192;
 #else
 	constexpr int MAX_GENERATE_JOBS = 256;
 	constexpr int MAX_SAVE_JOBS = 6;
 	constexpr int MAX_LOAD_JOBS = 6;
-	constexpr int MAX_CHUNK_MESHES_TO_BUILD = 1;
+	constexpr int MAX_CHUNK_MESHES_TO_BUILD = 2;
+	constexpr int MAX_CHUNKS_TO_ACTIVATE = 2;
+	constexpr int MAX_CHUNKS_TO_DEACTIVATE = 8;
+	constexpr int MAX_DIRTY_LIGHT_BLOCKS_PER_FRAME = 16384;
+	constexpr int MAX_DIRTY_LIGHT_BACKLOG = 32768;
 #endif // ENGINE_DEBUG_RENDER
 
 // Game Variables---------------------------------------------------------------------------------------------------

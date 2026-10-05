@@ -2093,7 +2093,7 @@ bool Chunk::TryLoadFromFile()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 inline bool Chunk::IsValidNeighbour(Neighbours neighbourDirection)
 {
-	return m_neighbours[neighbourDirection] && (m_neighbours[neighbourDirection]->m_chunkState == ChunkState::ACTIVE);
+	return m_neighbours[neighbourDirection] && (m_neighbours[neighbourDirection]->m_chunkState == ChunkState::ACTIVE || m_neighbours[neighbourDirection]->m_chunkState == ChunkState::ACTIVE_DIRTY);
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2126,26 +2126,47 @@ void Chunk::PlaceBlockOfType(uint32_t blockIndex, unsigned char blockType)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Chunk::InitializeLighting(std::deque<BlockIterator>& dirtyLightingBlocks)
+void Chunk::InitializeLighting()
 {
-	// Boundary Blocks Loop
-	for(int x = 0; x <= CHUNK_MAX_X; x++)
-	{
-		for(int y = 0; y <= CHUNK_MAX_Y; y++)
-		{
-			for(int z = 0; z <= CHUNK_MAX_Z; z++)
-			{
-				uint32_t blockIndex = LocalCoordsToIndex(x, y, z);
-				if(m_blocks[blockIndex].IsBlockOpaque())
-				{
-					continue;
-				}
+	World* world = Game::GetWorld();
 
-				if((x == 0 && IsValidNeighbour(NEIGHBOUR_NEG_X)) || (x == CHUNK_MAX_X && IsValidNeighbour(NEIGHBOUR_POS_X)) ||
-				   (y == 0 && IsValidNeighbour(NEIGHBOUR_NEG_Y)) || (y == CHUNK_MAX_Y && IsValidNeighbour(NEIGHBOUR_POS_Y)))
-				{
-					m_blocks[blockIndex].SetIsLightDirty(true);
-				}
+	bool hasNegXNeighbour = IsValidNeighbour(NEIGHBOUR_NEG_X);
+	bool hasPosXNeighbour = IsValidNeighbour(NEIGHBOUR_POS_X);
+	bool hasNegYNeighbour = IsValidNeighbour(NEIGHBOUR_NEG_Y);
+	bool hasPosYNeighbour = IsValidNeighbour(NEIGHBOUR_POS_Y);
+
+	// Boundary Blocks Loop
+	for(int z = 0; z <= CHUNK_MAX_Z; z++)
+	{
+		if(hasNegYNeighbour)
+		{
+			for(int x = 0; x <= CHUNK_MAX_X; x++)
+			{
+				world->MarkLightingDirtyIfNotOpaque(BlockIterator(this, LocalCoordsToIndex(x, 0, z)));
+			}
+		}
+
+		if(hasPosYNeighbour)
+		{
+			for(int x = 0; x <= CHUNK_MAX_X; x++)
+			{
+				world->MarkLightingDirtyIfNotOpaque(BlockIterator(this, LocalCoordsToIndex(x, CHUNK_MAX_Y, z)));
+			}
+		}
+
+		if(hasNegXNeighbour)
+		{
+			for(int y = 0; y <= CHUNK_MAX_Y; y++)
+			{
+				world->MarkLightingDirtyIfNotOpaque(BlockIterator(this, LocalCoordsToIndex(0, y, z)));
+			}
+		}
+
+		if(hasPosXNeighbour)
+		{
+			for(int y = 0; y <= CHUNK_MAX_Y; y++)
+			{
+				world->MarkLightingDirtyIfNotOpaque(BlockIterator(this, LocalCoordsToIndex(CHUNK_MAX_X, y, z)));
 			}
 		}
 	}
@@ -2164,7 +2185,13 @@ void Chunk::InitializeLighting(std::deque<BlockIterator>& dirtyLightingBlocks)
 				}
 				m_blocks[blockIndex].SetIsSky(true);
 			}
+		}
+	}
 
+	for(int x = 0; x <= CHUNK_MAX_X; x++)
+	{
+		for(int y = 0; y <= CHUNK_MAX_Y; y++)
+		{
 			for(int z = CHUNK_MAX_Z; z >= 0; z--)
 			{
 				uint32_t blockIndex = LocalCoordsToIndex(x, y, z);
@@ -2174,7 +2201,6 @@ void Chunk::InitializeLighting(std::deque<BlockIterator>& dirtyLightingBlocks)
 				}
 
 				m_blocks[blockIndex].SetOutdoorLightInfluence(OUTDOOR_LIGHT_INFLUENCE_MAX);
-				m_blocks[blockIndex].SetIsLightDirty(true);
 				MarkNonSkyHorizontalBlockLightDirty(IntVec3(x, y, z));
 			}
 		}
@@ -2186,44 +2212,37 @@ void Chunk::InitializeLighting(std::deque<BlockIterator>& dirtyLightingBlocks)
 	{
 		if(m_blocks[i].m_blockDefinitionIndex == glowstoneIndex)
 		{
-			int lightInfluence = BlockDefinition::GetIndoorLighting(glowstoneIndex);
-			m_blocks[i].SetIndoorLightInfluence(static_cast<uint8_t>(lightInfluence));
-			m_blocks[i].SetIsLightDirty(true);
-		}
-
-		if(m_blocks[i].IsLightDirty())
-		{
-			dirtyLightingBlocks.push_back(BlockIterator(this, i));
+			world->MarkLightingDirty(BlockIterator(this, i));
 		}
 	}
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Chunk::MarkNonSkyHorizontalBlockLightDirty(IntVec3 const& localCoords)
-{	
-	BlockIterator iterator;
-	iterator.m_chunk = this;
-	iterator.m_blockIndex = LocalCoordsToIndex(localCoords);
+{
+	World* world = Game::GetWorld();
 
-	Block* posXBlock = iterator.GetPosXBlock();
-	Block* posYBlock = iterator.GetPosYBlock();
-	Block* negXBlock = iterator.GetNegXBlock();
-	Block* negYBlock = iterator.GetNegYBlock();
-	
-	if(posXBlock && !posXBlock->IsSky())
+	BlockIterator iterator(this, LocalCoordsToIndex(localCoords));
+
+	BlockIterator posXIterator = iterator.GetPosXBlockIterator();
+	BlockIterator posYIterator = iterator.GetPosYBlockIterator();
+	BlockIterator negXIterator = iterator.GetNegXBlockIterator();
+	BlockIterator negYIterator = iterator.GetNegYBlockIterator();
+
+	if(posXIterator.m_chunk && !posXIterator.GetBlockRef().IsSky())
 	{
-		posXBlock->SetIsLightDirty(true);
+		world->MarkLightingDirty(posXIterator);
 	}
-	if(posYBlock && !posYBlock->IsSky())
+	if(posYIterator.m_chunk && !posYIterator.GetBlockRef().IsSky())
 	{
-		posYBlock->SetIsLightDirty(true);
+		world->MarkLightingDirty(posYIterator);
 	}
-	if(negXBlock && !negXBlock->IsSky())
+	if(negXIterator.m_chunk && !negXIterator.GetBlockRef().IsSky())
 	{
-		negXBlock->SetIsLightDirty(true);
+		world->MarkLightingDirty(negXIterator);
 	}
-	if(negYBlock && !negYBlock->IsSky())
+	if(negYIterator.m_chunk && !negYIterator.GetBlockRef().IsSky())
 	{
-		negYBlock->SetIsLightDirty(true);
+		world->MarkLightingDirty(negYIterator);
 	}
 }
 

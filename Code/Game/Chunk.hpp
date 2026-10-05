@@ -143,7 +143,7 @@ private:
 
     void                        RemoveBlock(uint32_t blockIndex);
     void                        PlaceBlockOfType(uint32_t blockIndex, unsigned char blockType);
-    void                        InitializeLighting(std::deque<BlockIterator>& dirtyLightingBlocks);
+    void                        InitializeLighting();
     void                        MarkNonSkyHorizontalBlockLightDirty(IntVec3 const& localCoords);
 
     void                        RecomputeLightingForBlockRemoved(uint32_t blockIndex);

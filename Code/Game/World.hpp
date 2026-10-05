@@ -50,6 +50,7 @@ public:
 
 	void MarkChunkDirty(Chunk* chunk);
 	void MarkLightingDirty(BlockIterator const& blockIter);
+	void MarkLightingDirtyIfNotOpaque(BlockIterator const& blockIter);
 
 	Entity* SpawnEntityOfType(EntityType type, Vec3 const& position, EulerAngles const& orientation);
 	void	AddEntityToWorld(Entity* entity);
@@ -71,8 +72,7 @@ private:
 
 	void			ProcessDirtyLighting();
 	BlockIterator	ProcessNextDirtyLightBlock();
-	void			UndirtyAllBlocksInChunk();
-	void			MarkLightingDirtyIfNotOpaque(BlockIterator const& blockIter);
+	void			UndirtyAllBlocksInChunk(Chunk* chunk);
 	void			MarkNeighborBlockLightDirty(BlockIterator& blockIter);
 
 	void			GetNeighborLightInfluences(BlockIterator& blockIter, uint8_t* out_indoorInfluences, uint8_t* out_outdoorInfluences);

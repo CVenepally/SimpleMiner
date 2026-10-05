@@ -223,6 +223,24 @@ void World::DebugJobInfo()
 			}
 		}
 
+		{
+			std::scoped_lock<std::mutex> lock(m_jobQueuesMutex);
+			numPendingSave = static_cast<int>(m_saveJobsQueue.size());
+			numSaving = m_numSaveJobsInJobSystem;
+		}
+
+		int numPendingBuild = 0;
+		{
+			std::scoped_lock<std::mutex> lock(m_pendingMeshBuildingMutex);
+			numPendingBuild = static_cast<int>(m_pendingMeshBuilding.size());
+		}
+
+		int numActiveChunks = 0;
+		{
+			std::scoped_lock<std::mutex> lock(m_activeChunksMutex);
+			numActiveChunks = static_cast<int>(m_activeChunks.size());
+		}
+
 		DebugAddScreenText("Chunks", textBox, 14.f, Vec2(0.003f, 0.37f), 0.f, Rgba8::YELLOW);
 		DebugAddScreenText(
 			Stringf(
@@ -240,8 +258,8 @@ void World::DebugJobInfo()
 				numLoading,
 				numPendingGenerate,
 				numGenerating,
-				static_cast<int>(m_pendingMeshBuilding.size()),
-				static_cast<int>(m_activeChunks.size())
+				numPendingBuild,
+				numActiveChunks
 			),
 			textBox, 14.f, Vec2(0.003f, 0.29f), 0.f, Rgba8::WHITE
 		);
@@ -497,6 +515,8 @@ void World::FindNeighboursForChunk(Chunk* chunk)
 			default:
 				break;
 			}
+
+			MarkChunkDirty(neighbour);
 		}
 	}
 }
@@ -645,6 +665,11 @@ void World::DeactivateAndSaveChunks_Job(bool isShuttingDown)
 
 		for(auto iter = m_activeChunks.begin(); iter != m_activeChunks.end(); ++iter)
 		{
+			if(!isShuttingDown && static_cast<int>(chunksToDeactivate.size()) >= MAX_CHUNKS_TO_DEACTIVATE)
+			{
+				break;
+			}
+
 			if(isShuttingDown || IsChunkOutsideDeactivationRange(iter->first, playerChunkCoords))
 			{
 				chunksToDeactivate.push_back(iter->second);
@@ -664,6 +689,8 @@ void World::DeactivateAndSaveChunks_Job(bool isShuttingDown)
 
 	for(Chunk* chunk : chunksToDeactivate)
 	{
+		UndirtyAllBlocksInChunk(chunk);
+
 		chunk->RemoveNeighbors();
 
 		if(chunk->m_isModified)
@@ -903,11 +930,11 @@ void World::TryCancelJobs()
 				bool didCancel = g_jobSystem->CancelPendingJob(job);
 				if(didCancel)
 				{
-// 					{
-// 						std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
-// 						m_pendingActivation.erase(chunkCoords);
-// 					}
-// 
+					{
+						std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
+						m_pendingActivation.erase(chunkCoords);
+					}
+
 					{
 						std::scoped_lock<std::mutex> lock(m_jobQueuesMutex);
 						auto iter = std::find(m_queuedActivateJobsInJobSystemQueue.begin(),
@@ -936,10 +963,10 @@ void World::TryCancelJobs()
 				bool didCancel = g_jobSystem->CancelPendingJob(job);
 				if(didCancel)
 				{
-// 					{
-// 						std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
-// 						m_pendingActivation.erase(chunkCoords);
-// 					}
+					{
+						std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
+						m_pendingActivation.erase(chunkCoords);
+					}
 
 					{
 						std::scoped_lock<std::mutex> lock(m_jobQueuesMutex);
@@ -973,8 +1000,6 @@ void World::GetCompletedJobs()
 	std::vector<Job*> completedJobs = g_jobSystem->RetrieveCompletedJobs();
 	g_jobSystem->RetrieveEarliestCompletedJob();
 
-	int activatedChunks = 0;
-
 	for(Job* job : completedJobs)
 	{
 		GenerateChunkJob* genJob = dynamic_cast<GenerateChunkJob*>(job);
@@ -989,7 +1014,6 @@ void World::GetCompletedJobs()
 			}
 
 			DeleteJob(genJob);
-//			activatedChunks++;
 			{
 				std::scoped_lock<std::mutex> lock(m_jobQueuesMutex);
 				m_numGenerateJobsInJobSystem -= 1;
@@ -1008,7 +1032,6 @@ void World::GetCompletedJobs()
 			}
 
 			DeleteJob(loadJob);
-//			activatedChunks++;
 
 			{
 				std::scoped_lock<std::mutex> lock(m_jobQueuesMutex);
@@ -1028,6 +1051,7 @@ void World::GetCompletedJobs()
 			}
 
 			DeleteJob(saveJob);
+			delete chunk;
 
 			{
 				std::scoped_lock<std::mutex> lock(m_jobQueuesMutex);
@@ -1038,7 +1062,6 @@ void World::GetCompletedJobs()
 	}
 	
 	g_completedJobsTime = (GetCurrentTimeSeconds() - startTime) * 1000.;
-	g_lightingInitAvg = g_lightingInitTotal / activatedChunks;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1079,57 +1102,69 @@ void World::ActivateChunk()
 {
 	double startTime = GetCurrentTimeSeconds();
 
-	Chunk* chunkToActivate = nullptr;
-
 	IntVec2 playerPos = Game::GetPlayerPosition().GetAsIntVec3().GetXY2D();
 
+	int chunksActivated = 0;
+
+	while(chunksActivated < MAX_CHUNKS_TO_ACTIVATE)
 	{
-		std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
-
-		auto bestIt = m_pendingActivation.end();
-		int bestDistanceSq = INT_MAX;
-
-		for(auto iter = m_pendingActivation.begin(); iter != m_pendingActivation.end(); ++iter)
+		if(g_enableLighting && static_cast<int>(m_dirtyLighting.size()) > MAX_DIRTY_LIGHT_BACKLOG)
 		{
-			Chunk* chunk = iter->second;
-			if(!chunk)
-			{
-				continue;
-			}
-
-			if(chunk->m_chunkState != ChunkState::GENERATED && chunk->m_chunkState != ChunkState::LOADED)
-			{
-				continue;
-			}
-
-			IntVec2 chunkCenter = GetChunkCenter(iter->first);
-			int distanceSq = (chunkCenter - playerPos).GetLengthSquared();
-			if(distanceSq < bestDistanceSq)
-			{
-				bestIt = iter;
-				bestDistanceSq = distanceSq;
-			}
+			break;
 		}
 
-		if(bestIt != m_pendingActivation.end())
-		{
-			chunkToActivate = bestIt->second;
-			m_pendingActivation.erase(bestIt);
-		}
+		Chunk* chunkToActivate = nullptr;
 
-// 		for(auto const& iter : m_pendingActivation)
-// 		{
-// 			if(iter.second->m_chunkState == ChunkState::GENERATED || iter.second->m_chunkState == ChunkState::LOADED)
+		{
+			std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
+
+			auto bestIt = m_pendingActivation.end();
+			int bestDistanceSq = INT_MAX;
+
+			for(auto iter = m_pendingActivation.begin(); iter != m_pendingActivation.end(); ++iter)
+			{
+				Chunk* chunk = iter->second;
+				if(!chunk)
+				{
+					continue;
+				}
+
+				if(chunk->m_chunkState != ChunkState::GENERATED && chunk->m_chunkState != ChunkState::LOADED)
+				{
+					continue;
+				}
+
+				IntVec2 chunkCenter = GetChunkCenter(iter->first);
+				int distanceSq = (chunkCenter - playerPos).GetLengthSquared();
+				if(distanceSq < bestDistanceSq)
+				{
+					bestIt = iter;
+					bestDistanceSq = distanceSq;
+				}
+			}
+
+			if(bestIt != m_pendingActivation.end())
+			{
+				chunkToActivate = bestIt->second;
+				m_pendingActivation.erase(bestIt);
+			}
+
+// 			for(auto const& iter : m_pendingActivation)
 // 			{
-// 				chunkToActivate = iter.second;
-// 				m_pendingActivation.erase(chunkToActivate->m_chunkCoords);
-// 				break;
+// 				if(iter.second->m_chunkState == ChunkState::GENERATED || iter.second->m_chunkState == ChunkState::LOADED)
+// 				{
+// 					chunkToActivate = iter.second;
+// 					m_pendingActivation.erase(chunkToActivate->m_chunkCoords);
+// 					break;
+// 				}
 // 			}
-// 		}
-	}		
+		}
 
-	if(chunkToActivate)
-	{
+		if(!chunkToActivate)
+		{
+			break;
+		}
+
 		{
 			std::scoped_lock<std::mutex> lock(m_activeChunksMutex);
 			m_activeChunks[chunkToActivate->m_chunkCoords] = chunkToActivate;
@@ -1142,10 +1177,16 @@ void World::ActivateChunk()
 		double lightingStartTime = GetCurrentTimeSeconds();
 		if(g_enableLighting)
 		{
-			chunkToActivate->InitializeLighting(m_dirtyLighting);
+			chunkToActivate->InitializeLighting();
 		}
 		g_lightingInitTotal += (GetCurrentTimeSeconds() - lightingStartTime) * 1000.;
 
+		chunksActivated += 1;
+	}
+
+	if(chunksActivated > 0)
+	{
+		g_lightingInitAvg = g_lightingInitTotal / chunksActivated;
 	}
 
 	g_activateJobsTime += (GetCurrentTimeSeconds() - startTime) * 1000.;
@@ -1175,9 +1216,11 @@ void World::DeleteJob(Job* job)
 void World::ProcessDirtyLighting()
 {
 	double startTime = GetCurrentTimeSeconds();
-	while(!m_dirtyLighting.empty())
+	int blocksProcessed = 0;
+	while(!m_dirtyLighting.empty() && blocksProcessed < MAX_DIRTY_LIGHT_BLOCKS_PER_FRAME)
 	{
 		BlockIterator clearedBlockIter = ProcessNextDirtyLightBlock();
+		blocksProcessed += 1;
 	}
 	g_lightingProcess = (GetCurrentTimeSeconds() - startTime) * 1000.;
 }
@@ -1388,8 +1431,21 @@ void World::SetSkyColor()
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void World::UndirtyAllBlocksInChunk()
-{}
+void World::UndirtyAllBlocksInChunk(Chunk* chunk)
+{
+	size_t keptCount = 0;
+
+	for(size_t index = 0; index < m_dirtyLighting.size(); ++index)
+	{
+		if(m_dirtyLighting[index].m_chunk != chunk)
+		{
+			m_dirtyLighting[keptCount] = m_dirtyLighting[index];
+			keptCount += 1;
+		}
+	}
+
+	m_dirtyLighting.resize(keptCount);
+}
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void World::MarkLightingDirtyIfNotOpaque(BlockIterator const& blockIter)
