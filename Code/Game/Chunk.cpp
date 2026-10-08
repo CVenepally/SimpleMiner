@@ -1,4 +1,4 @@
-﻿#include "Game/Chunk.hpp"
+#include "Game/Chunk.hpp"
 #include "Game/Game.hpp"
 #include "Game/World.hpp"
 #include "Game/BlockDefinition.hpp"
@@ -37,12 +37,10 @@ Chunk::Chunk()
 }
 
 //------------------------------------------------------------------------------------------------------------------
-Chunk::Chunk(IntVec2 const& chunkCoordinates)
+Chunk::Chunk(IntVec2 const& chunkCoordinates, bool hasSaveFile)
     : m_chunkCoords(chunkCoordinates)
 {
-
-	std::string fileName = Stringf("Saves/Chunk(%i,%i).chunk", m_chunkCoords.x, m_chunkCoords.y);
-	if(DoesFileExist(fileName))
+	if(hasSaveFile)
 	{
 		m_chunkState = ChunkState::PENDING_LOAD;
 	}
@@ -117,9 +115,6 @@ void Chunk::InitializeBlocks()
 	std::vector<int> obsidianDepthMap;
 	obsidianDepthMap.resize(CHUNK_SIZE_X * CHUNK_SIZE_Y);
 
-//     GenerateTerrain(densityMap, continentalnessMap, erosionMap, peaksAndValleysMap, temperatureMap, humidityMap, heightMap, dirtDepthMap, 
-// 					lavaDepthMap, obsidianDepthMap);
-// 
 	GenerateTerrain_New(densityMap, continentalnessMap, erosionMap, peaksAndValleysMap, temperatureMap, humidityMap, heightMap, dirtDepthMap, 
  					lavaDepthMap, obsidianDepthMap);
 
@@ -129,150 +124,48 @@ void Chunk::InitializeBlocks()
 //     m_chunkVerts.reserve(BLOCKS_PER_CHUNK * 18);
 //     m_indices.reserve(BLOCKS_PER_CHUNK * 30);
 
-    DebuggerPrintf("[Chunk] Blocks Initialized!\n");
-}
-
-//-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Chunk::GenerateTerrain(std::vector<float>& densityMap, std::vector<float>& continentalnessMap, std::vector<float>& erosionMap, 
-                                   std::vector<float>& peaksAndValleysMap, std::vector<float>& temperatureMap, std::vector<float>& humidityMap, 
-                                   std::vector<int>& heightMap, std::vector<int>& dirtDepthMap, std::vector<int>& lavaDepthMap, std::vector<int>& obsidianDepthMap)
-{
-	for(int y = 0; y < CHUNK_SIZE_Y; ++y)
-	{
-		for(int x = 0; x < CHUNK_SIZE_X; ++x)
-		{
-			float   globalX = static_cast<float>(m_chunkCoords.x * CHUNK_SIZE_X + x);
-			float   globalY = static_cast<float>(m_chunkCoords.y * CHUNK_SIZE_Y + y);
-			int     colIndex = y * CHUNK_SIZE_X + x;
-
-			float heightOffset = ComputeTerrainHeightOffset(globalX, globalY, continentalnessMap, erosionMap, peaksAndValleysMap, colIndex);
-
-			float baseTerrainHeight = DEFAULT_TERRAIN_HEIGHT + (heightOffset * (CHUNK_SIZE_Z / 2));
-			float oneOverBaseHeight = 1.f / baseTerrainHeight;
-
-            // Temperature and humidity
-            float temperature = Compute2dPerlinNoise(globalX, globalY, TEMPERATURE_NOISE_SCALE, TEMPERATURE_NOISE_OCTAVES, DEFAULT_OCTAVE_PERSISTENCE, 
-                                                     DEFAULT_NOISE_OCTAVE_SCALE, true, TEMPERATURE_SEED);
-            temperatureMap[colIndex] = temperature;
-            
-            float humidity = Compute2dPerlinNoise(globalX, globalY, HUMIDITY_NOISE_SCALE, HUMIDITY_NOISE_OCTAVES, DEFAULT_OCTAVE_PERSISTENCE, 
-                                                     DEFAULT_NOISE_OCTAVE_SCALE, true, HUMIDITY_SEED);
-            humidityMap[colIndex] = humidity;
-
-            // Dirt Depth
-			float dirtDepthPercent  = Get2dNoiseNegOneToOne(static_cast<int>(globalX), static_cast<int>(globalY), DIRT_DEPTH_SEED);
-			int dirtDepth           = MIN_DIRT_OFFSET_Z + RoundDownToInt(dirtDepthPercent * (MAX_DIRT_OFFSET_Z - MIN_DIRT_OFFSET_Z));
-
-			dirtDepthMap[colIndex] = dirtDepth;
-
-            // Lava Depth
-			float	lavaDepthPercent	= Get2dNoiseNegOneToOne(static_cast<int>(globalX), static_cast<int>(globalY), LAVA_DEPTH_SEED);
-			int		lavaDepth           = MIN_LAVA_BLOCKS + RoundDownToInt(lavaDepthPercent * (MAX_LAVA_BLOCKS - MIN_LAVA_BLOCKS));
-
-			lavaDepthMap[colIndex] = lavaDepth;
-
-            // Obsidian Depth
-			float obsidianDepthPercent  = Get2dNoiseNegOneToOne(static_cast<int>(globalX), static_cast<int>(globalY), OBSIDIAN_DEPTH_SEED);
-			int obsidianDepth           = MIN_OBSIDIAN_BLOCKS + RoundDownToInt(obsidianDepthPercent * (MAX_OBSIDIAN_BLOCKS - MIN_OBSIDIAN_BLOCKS));
-
-			obsidianDepthMap[colIndex] = obsidianDepth;
-			
-			int highestZ = 0;
-
-			for(int z = 0; z < CHUNK_SIZE_Z; ++z)
-			{
-				IntVec3 localCoords = IntVec3(x, y, z);
-				IntVec3 globalCoords = GetGlobalCoords(m_chunkCoords, localCoords);
-				Vec3    globalCoordsFloats = Vec3(globalCoords);
-				int index = LocalCoordsToIndex(localCoords);
-
-				// Density
-				float rawDensityValue = Compute3dPerlinNoise(globalCoordsFloats.x, globalCoordsFloats.y, globalCoordsFloats.z, g_densityNoiseScale, static_cast<unsigned int>(g_densityNoiseOctaves), g_octavePersistence, g_octaveScale, true, DENSITY_SEED);
-
-				float bias = g_densityBiasPerBlockDelta * (globalCoords.z - baseTerrainHeight);
-
-				float biasedDensity = rawDensityValue + bias;
-
-				if(!g_computeDensity)
-				{
-					biasedDensity = 0.f;
-				}
-
-				if(g_computeContinentalness)
-				{
-					float heightOffSetFromTerrainHeight = (globalCoords.z - baseTerrainHeight) * oneOverBaseHeight;
-					biasedDensity += heightOffSetFromTerrainHeight;
-				}
-
-				densityMap[index] = biasedDensity;
-
-				if(biasedDensity < 0.f)
-				{
-					if(globalCoords.z > highestZ)
-					{
-						highestZ = globalCoords.z;
-					}
-				}
-			}
-			heightMap[colIndex] = highestZ;
-		}
-	}
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Chunk::GenerateTerrain_New(std::vector<float>& densityMap, std::vector<float>& continentalnessMap, std::vector<float>& erosionMap, std::vector<float>& peaksAndValleysMap, std::vector<float>& temperatureMap, std::vector<float>& humidityMap, std::vector<int>& heightMap, std::vector<int>& dirtDepthMap, std::vector<int>& lavaDepthMap, std::vector<int>& obsidianDepthMap)
 {
+	constexpr int BORDERED_SIZE_X = CHUNK_SIZE_X + 2;
+	constexpr int BORDERED_SIZE_Y = CHUNK_SIZE_Y + 2;
+
+	std::vector<float> borderedTerrainHeights;
+	borderedTerrainHeights.resize(BORDERED_SIZE_X * BORDERED_SIZE_Y);
+
+	for(int y = -1; y <= CHUNK_SIZE_Y; ++y)
+	{
+		for(int x = -1; x <= CHUNK_SIZE_X; ++x)
+		{
+			float globalX = static_cast<float>(m_chunkCoords.x * CHUNK_SIZE_X + x);
+			float globalY = static_cast<float>(m_chunkCoords.y * CHUNK_SIZE_Y + y);
+
+			TerrainColumn column = ComputeTerrainColumn(globalX, globalY);
+			borderedTerrainHeights[(y + 1) * BORDERED_SIZE_X + (x + 1)] = column.m_height;
+
+			if(x >= 0 && x < CHUNK_SIZE_X && y >= 0 && y < CHUNK_SIZE_Y)
+			{
+				int colIndex = y * CHUNK_SIZE_X + x;
+				continentalnessMap[colIndex]	= column.m_continentalness;
+				erosionMap[colIndex]			= column.m_erosion;
+				peaksAndValleysMap[colIndex]	= column.m_peaksAndValleys;
+				temperatureMap[colIndex]		= column.m_temperature;
+			}
+		}
+	}
+
 	for(int y = 0; y < CHUNK_SIZE_Y; ++y)
 	{
 		for(int x = 0; x < CHUNK_SIZE_X; ++x)
 		{	
-			// Continentalness Terrain Height Offset Calculation
-
 			float   globalX = static_cast<float>(m_chunkCoords.x * CHUNK_SIZE_X + x);
 			float   globalY = static_cast<float>(m_chunkCoords.y * CHUNK_SIZE_Y + y);
 			int     colIndex = y * CHUNK_SIZE_X + x;
 
-			float continentalnessHeightOffset = 0.f;
-			float erosion = 0.f;
-			float heightOffset = 0.f;
-
-			if(g_computeContinentalness)
-			{
-
-				float continentalnessInput = Compute2dPerlinNoise(globalX, globalY, g_continentalnessNoiseScale, static_cast<unsigned int>(g_continentalnessNoiseOctaves),
-															  DEFAULT_OCTAVE_PERSISTENCE, DEFAULT_NOISE_OCTAVE_SCALE, true, CONTINENTALNESS_SEED);
-			
-				continentalnessHeightOffset = g_continentalnessCurve.Evaluate_new(continentalnessInput);
-
-				continentalnessMap[colIndex] = (continentalnessHeightOffset);
-				heightOffset = continentalnessHeightOffset;
-			}
-
-			if(g_computeErosion)
-			{
-				float erosionInput = Compute2dPerlinNoise(globalX, globalY, g_erosionNoiseScale, static_cast<unsigned int>(g_erosionNoiseOctaves),
-													  DEFAULT_OCTAVE_PERSISTENCE, DEFAULT_NOISE_OCTAVE_SCALE, true, EROSION_SEED);
-
-				erosion = g_erosionCurve.Evaluate_new(continentalnessHeightOffset) * erosionInput;
-
-				erosionMap[colIndex] = erosion;
-				heightOffset = erosion;
-			}
-			
-			if(g_computePeaksAndValley)
-			{
-				float weirdnessInput = Compute2dPerlinNoise(globalX, globalY, g_weirdnessNoiseScale, static_cast<unsigned int>(g_weirdnessNoiseOctaves),
-														DEFAULT_OCTAVE_PERSISTENCE, DEFAULT_NOISE_OCTAVE_SCALE, true, WEIRDNESS_SEED);
-				float weirdness = g_weirdnessCurve.Evaluate_new(continentalnessHeightOffset) * weirdnessInput;
-				float pv = 1.f - fabsf(3.f * fabsf(weirdness) - 2);
-				peaksAndValleysMap[colIndex] = pv;
-			//	heightOffset = pv;
-			}
-
-			// Temperature and humidity
-			float temperature = Compute2dPerlinNoise(globalX, globalY, TEMPERATURE_NOISE_SCALE, TEMPERATURE_NOISE_OCTAVES, DEFAULT_OCTAVE_PERSISTENCE,
-													 DEFAULT_NOISE_OCTAVE_SCALE, true, TEMPERATURE_SEED);
-			temperatureMap[colIndex] = temperature;
+			int		borderedIndex = (y + 1) * BORDERED_SIZE_X + (x + 1);
+			float	terrainHeight = borderedTerrainHeights[borderedIndex];
 
 			float humidity = Compute2dPerlinNoise(globalX, globalY, HUMIDITY_NOISE_SCALE, HUMIDITY_NOISE_OCTAVES, DEFAULT_OCTAVE_PERSISTENCE,
 												  DEFAULT_NOISE_OCTAVE_SCALE, true, HUMIDITY_SEED);
@@ -281,6 +174,15 @@ void Chunk::GenerateTerrain_New(std::vector<float>& densityMap, std::vector<floa
 			// Dirt Depth
 			float dirtDepthPercent = Get2dNoiseNegOneToOne(static_cast<int>(globalX), static_cast<int>(globalY), DIRT_DEPTH_SEED);
 			int dirtDepth = MIN_DIRT_OFFSET_Z + RoundDownToInt(dirtDepthPercent * (MAX_DIRT_OFFSET_Z - MIN_DIRT_OFFSET_Z));
+
+			float largestDrop = 0.f;
+			largestDrop = GetMax(largestDrop, terrainHeight - borderedTerrainHeights[borderedIndex - 1]);
+			largestDrop = GetMax(largestDrop, terrainHeight - borderedTerrainHeights[borderedIndex + 1]);
+			largestDrop = GetMax(largestDrop, terrainHeight - borderedTerrainHeights[borderedIndex - BORDERED_SIZE_X]);
+			largestDrop = GetMax(largestDrop, terrainHeight - borderedTerrainHeights[borderedIndex + BORDERED_SIZE_X]);
+
+			int slopeDepth = GetMin(RoundDownToInt(largestDrop) + 1, MAX_SURFACE_DEPTH);
+			dirtDepth = GetMax(dirtDepth, slopeDepth);
 
 			dirtDepthMap[colIndex] = dirtDepth;
 
@@ -306,98 +208,91 @@ void Chunk::GenerateTerrain_New(std::vector<float>& densityMap, std::vector<floa
 				int index = LocalCoordsToIndex(localCoords);
 
 				// Density
-				float rawDensityValue = Compute3dPerlinNoise(globalCoordsFloats.x, globalCoordsFloats.y, globalCoordsFloats.z, g_densityNoiseScale, static_cast<unsigned int>(g_densityNoiseOctaves), g_octavePersistence, g_octaveScale, true, DENSITY_SEED);
-
-				float baseTerrainHeight = g_densityTerrainHeight + (heightOffset * (CHUNK_SIZE_Z / 2));
-
-				float bias = g_densityBiasPerBlockDelta * (baseTerrainHeight - globalCoords.z);
-
-				float biasedDensity = rawDensityValue + bias;
-
-				float heightOffSetFromTerrainHeight = (globalCoords.z - baseTerrainHeight) * (1.f / baseTerrainHeight);
-
-				if(!g_computeContinentalness)
+				float biasDensity = g_densityBiasPerBlockDelta * (terrainHeight - globalCoordsFloats.z);
+				float rawDensityValue = 0.f;
+				if(g_computeDensity && fabsf(biasDensity) <= 1.f)
 				{
-					heightOffSetFromTerrainHeight = 0.f;
+					rawDensityValue = Compute3dPerlinNoise(globalCoordsFloats.x, globalCoordsFloats.y, globalCoordsFloats.z, g_densityNoiseScale, static_cast<unsigned int>(g_densityNoiseOctaves), g_octavePersistence, g_octaveScale, true, DENSITY_SEED);
 				}
 
-				biasedDensity += heightOffset;
-				biasedDensity -= heightOffSetFromTerrainHeight;
+				float density = rawDensityValue + biasDensity;
 
-				if(!g_computeDensity)
+				densityMap[index] = density;
+
+				if(density > 0.f && globalCoords.z > highestZ)
 				{
-					biasedDensity = 1.f;
-				}
-
-				densityMap[index] = biasedDensity;
-
-				if(biasedDensity > 0.f)
-				{
-					if(globalCoords.z > highestZ)
-					{
-						highestZ = globalCoords.z;
-					}
+					highestZ = globalCoords.z;
 				}
 			}
 
 			heightMap[colIndex] = highestZ;
-
 		}
 	}
-
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-float Chunk::ComputeTerrainHeightOffset(float blockGlobalX, float blockGlobalY, std::vector<float>& continentalnessMap, std::vector<float>& erosionMap,
-										std::vector<float>& peaksAndValleysMap, int colIndex)
+TerrainColumn Chunk::ComputeTerrainColumn(float globalX, float globalY) const
 {
-	float finalHeightOffset = 0.f;
-    float erosion = 1.f;
-    float pv = 0.f;
+	TerrainColumn column;
 
-	// Continentalness
-	float continentalnessInput = Compute2dPerlinNoise(blockGlobalX, blockGlobalY, g_continentalnessNoiseScale, static_cast<unsigned int>(g_continentalnessNoiseOctaves),
-													  DEFAULT_OCTAVE_PERSISTENCE, DEFAULT_NOISE_OCTAVE_SCALE, true, CONTINENTALNESS_SEED);
+	float continentalness = Compute2dPerlinNoise(globalX, globalY, g_continentalnessNoiseScale, static_cast<unsigned int>(g_continentalnessNoiseOctaves),
+												 DEFAULT_OCTAVE_PERSISTENCE, DEFAULT_NOISE_OCTAVE_SCALE, true, CONTINENTALNESS_SEED);
 
-	float continentalness = g_continentalnessCurve.Evaluate(continentalnessInput);
+	float erosion = Compute2dPerlinNoise(globalX, globalY, g_erosionNoiseScale, static_cast<unsigned int>(g_erosionNoiseOctaves),
+										 DEFAULT_OCTAVE_PERSISTENCE, DEFAULT_NOISE_OCTAVE_SCALE, true, EROSION_SEED);
 
-	continentalnessMap[colIndex] = (continentalness);
+	float weirdness = Compute2dPerlinNoise(globalX, globalY, g_weirdnessNoiseScale, static_cast<unsigned int>(g_weirdnessNoiseOctaves),
+										   DEFAULT_OCTAVE_PERSISTENCE, DEFAULT_NOISE_OCTAVE_SCALE, true, WEIRDNESS_SEED);
 
-	float erosionInput = Compute2dPerlinNoise(blockGlobalX, blockGlobalY, g_erosionNoiseScale, static_cast<unsigned int>(g_erosionNoiseOctaves),
-											  DEFAULT_OCTAVE_PERSISTENCE, DEFAULT_NOISE_OCTAVE_SCALE, true, EROSION_SEED);
-	erosion = g_erosionCurve.Evaluate(continentalness) * erosionInput;
-	//erosion = g_erosionCurve.Evaluate(erosionInput);
+	float mountainRegion = Compute2dPerlinNoise(globalX, globalY, MOUNTAIN_REGION_NOISE_SCALE, MOUNTAIN_REGION_NOISE_OCTAVES,
+												DEFAULT_OCTAVE_PERSISTENCE, DEFAULT_NOISE_OCTAVE_SCALE, true, MOUNTAIN_REGION_SEED);
 
-	erosionMap[colIndex] = erosion;
+	float temperature = Compute2dPerlinNoise(globalX, globalY, TEMPERATURE_NOISE_SCALE, TEMPERATURE_NOISE_OCTAVES, DEFAULT_OCTAVE_PERSISTENCE,
+											 DEFAULT_NOISE_OCTAVE_SCALE, true, TEMPERATURE_SEED);
 
-	float weirdnessInput = Compute2dPerlinNoise(blockGlobalX, blockGlobalY, g_weirdnessNoiseScale, static_cast<unsigned int>(g_weirdnessNoiseOctaves),
-												DEFAULT_OCTAVE_PERSISTENCE, DEFAULT_NOISE_OCTAVE_SCALE, true, WEIRDNESS_SEED);
-	float weirdness = g_weirdnessCurve.Evaluate(continentalness) * weirdnessInput;
-	//float weirdness = g_weirdnessCurve.Evaluate(weirdnessInput);
+	float mountainScale = RangeMapClamped(mountainRegion, MOUNTAIN_REGION_START, MOUNTAIN_REGION_FULL, 0.f, 1.f);
 
-	pv = 1.f - abs((3.f * abs(weirdness)) - 2.f);
+	float weirdnessStretch = Lerp(1.f, WEIRDNESS_NOISE_STRETCH, mountainScale);
+	weirdness = GetClamped(weirdness * weirdnessStretch, -1.f, 1.f);
 
-	peaksAndValleysMap[colIndex] = pv;
+	float peaksAndValleys = 1.f - fabsf(3.f * fabsf(weirdness) - 2.f);
 
-	float continentalnessHeightOffset = continentalness;
-	float erosionHeightOffset = erosion;
-	float pvHeightOffset =  pv;
+	column.m_continentalness	= continentalness;
+	column.m_erosion			= Lerp(erosion, -1.f, mountainScale * MOUNTAIN_REGION_EROSION_PULL);
+	column.m_peaksAndValleys	= peaksAndValleys;
 
-	if(!g_computeErosion)
+	float continentalnessHeightOffset = 0.f;
+	if(g_computeContinentalness)
 	{
-		erosionHeightOffset = 0.f;
+		continentalnessHeightOffset = g_continentalnessCurve.Evaluate_new(continentalness) * CONTINENTALNESS_HEIGHT_RANGE;
 	}
-    
-    if(!g_computePeaksAndValley)
-    {
-		pvHeightOffset = 0.f;
-    }
 
+	float erosionScale = 1.f;
+	if(g_computeErosion)
+	{
+		erosionScale = g_erosionCurve.Evaluate_new(column.m_erosion);
+	}
 
-    //finalHeightOffset = continentalnessHeightOffset * erosionHeightOffset + pvHeightOffset;
-    finalHeightOffset = continentalnessHeightOffset + erosionHeightOffset + pvHeightOffset;
+	float peaksAndValleysHeightOffset = 0.f;
+	if(g_computePeaksAndValley)
+	{
+		float inlandScale = RangeMapClamped(continentalness, g_coastCurve.m_start, g_midInlandCurve.m_start, 0.f, 1.f);
+		peaksAndValleysHeightOffset = g_weirdnessCurve.Evaluate_new(peaksAndValleys) * erosionScale * inlandScale * PEAKS_AND_VALLEYS_HEIGHT_RANGE;
 
-	return finalHeightOffset;
+		if(peaksAndValleysHeightOffset > 0.f)
+		{
+			float coldScale = RangeMapClamped(-temperature, -COLD_MOUNTAIN_START_TEMPERATURE, -COLD_MOUNTAIN_FULL_TEMPERATURE, 1.f, COLD_MOUNTAIN_HEIGHT_MULTIPLIER);
+			peaksAndValleysHeightOffset *= coldScale;
+		}
+	}
+
+	column.m_height = g_densityTerrainHeight + continentalnessHeightOffset + peaksAndValleysHeightOffset;
+	column.m_height = GetMin(column.m_height, MAX_TERRAIN_HEIGHT);
+
+	float altitudeAboveSnowLine = GetMax(column.m_height - ALTITUDE_TEMPERATURE_START_Z, 0.f);
+	column.m_temperature = temperature - (altitudeAboveSnowLine * ALTITUDE_TEMPERATURE_DROP);
+
+	return column;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -405,7 +300,7 @@ void Chunk::SurfaceBlockReplacement(std::vector<float>& densityMap, std::vector<
 									std::vector<float>& peaksAndValleysMap, std::vector<float>& temperatureMap, std::vector<float>& humidityMap,
 									std::vector<int>& heightMap, std::vector<int>& dirtDepthMap, std::vector<int>& lavaDepthMap, std::vector<int>& obsidianDepthMap)
 {
-	std::string blockType = "Air";
+	unsigned char blockType = g_blockTypes.m_air;
 
 	for(int y = 0; y < CHUNK_SIZE_Y; ++y)
 	{
@@ -440,18 +335,18 @@ void Chunk::SurfaceBlockReplacement(std::vector<float>& densityMap, std::vector<
 
 				if(biomeGenParams.m_density > 0.f)
 				{
-					blockType = "Stone";
+					blockType = g_blockTypes.m_stone;
 				}
 				else
 				{
-					blockType = "Air";
+					blockType = g_blockTypes.m_air;
 				}
 
 				if(g_enableSurfaceBlockReplacement)
 				{
-					if(globalCoords.z <= SEA_LEVEL_Z && blockType == "Air")
+					if(globalCoords.z <= SEA_LEVEL_Z && blockType == g_blockTypes.m_air)
 					{
-						blockType = "Water";
+						blockType = g_blockTypes.m_water;
 					}
 
 					biomeGenParams.m_blockBeforeReplacement = blockType;
@@ -472,41 +367,50 @@ void Chunk::SurfaceBlockReplacement(std::vector<float>& densityMap, std::vector<
 					{
 						if(globalCoords.z >= lavaStartZ && globalCoords.z <= lavaEndZ)
 						{
-							blockType = "Lava";
+							blockType = g_blockTypes.m_lava;
 						}
 						else if(globalCoords.z >= obsidianStartZ && globalCoords.z <= obsidianEndZ)
 						{
-							blockType = "Obsidian";
+							blockType = g_blockTypes.m_obsidian;
 						}
 						else
 						{
 							float oreNoise = Get3dNoiseZeroToOne(globalCoords.x, globalCoords.y, globalCoords.z);
 							if(oreNoise < DIAMOND_CHANCE)
 							{
-								blockType = "Diamond";
+								blockType = g_blockTypes.m_diamond;
 							}
 							else if(oreNoise < GOLD_CHANCE)
 							{
-								blockType = "Gold";
+								blockType = g_blockTypes.m_gold;
 							}
 							else if(oreNoise < IRON_CHANCE)
 							{
-								blockType = "Iron";
+								blockType = g_blockTypes.m_iron;
 							}
 							else if(oreNoise < COAL_CHANCE)
 							{
-								blockType = "Coal";
+								blockType = g_blockTypes.m_coal;
 							}
 							else
 							{
-								blockType = "Stone";
+								blockType = g_blockTypes.m_stone;
 							}
+						}
+					}
+
+					if(globalCoords.z == biomeGenParams.m_height + 1 && blockType == g_blockTypes.m_air)
+					{
+						float glowstoneNoise = Get2dNoiseZeroToOne(globalCoords.x, globalCoords.y, GLOWSTONE_SEED);
+						if(glowstoneNoise < GLOWSTONE_SURFACE_CHANCE)
+						{
+							blockType = g_blockTypes.m_glowstone;
 						}
 					}
 
 				}
 
-				m_blocks[index].m_blockDefinitionIndex = BlockDefinition::GetBlockDefinitionIndex(blockType);
+				m_blocks[index].m_blockDefinitionIndex = blockType;
 			}
 		}
 	}
@@ -518,40 +422,40 @@ void Chunk::BuildChunkMesh()
     m_chunkVerts.clear();
     m_indices.clear();
 
-    if(m_vertexBuffer)
-    {
-        delete m_vertexBuffer;
-        m_vertexBuffer = nullptr;
-    }
-    if(m_indexBuffer)
-    {
-        delete m_indexBuffer;
-        m_indexBuffer = nullptr;
-    }
-
     for(int blockIndex = 0; blockIndex < BLOCKS_PER_CHUNK; ++blockIndex)
     {
 		if(m_blocks[blockIndex].IsBlockVisible())
 		{
+			BlockIterator iter = BlockIterator(this, blockIndex);
+			Directions blockingDirections = iter.GetBlockingDirections(blockIndex);
+
+			if(blockingDirections == DIRECTION_ALL)
+			{
+				continue;
+			}
+
             IntVec3 globalBlockCoords = GetGlobalCoords(m_chunkCoords, blockIndex);
 
-			AABB3 blockBounds;
-			blockBounds.m_mins = Vec3(globalBlockCoords);
-			blockBounds.m_maxs = Vec3(globalBlockCoords) + Vec3::ONE;
+			Vec3 mins = Vec3(globalBlockCoords);
+			Vec3 maxs = mins + Vec3::ONE;
 
 			Rgba8 zFaceColor = Rgba8::WHITE;
 			Rgba8 xFaceColor = Rgba8(230, 230, 230);
 			Rgba8 yFaceColor = Rgba8(200, 200, 200);
 
-			std::vector<Vec3> eightCornerPoints;
-			blockBounds.GetCornerPoints(eightCornerPoints);
+			Vec3 eightCornerPoints[AABB3_COUNT];
+			eightCornerPoints[AABB3_BACK_RIGHT_BOTTOM]		= mins;
+			eightCornerPoints[AABB3_BACK_RIGHT_TOP]			= Vec3(mins.x, mins.y, maxs.z);
+			eightCornerPoints[AABB3_BACK_LEFT_TOP]			= Vec3(mins.x, maxs.y, maxs.z);
+			eightCornerPoints[AABB3_BACK_LEFT_BOTTOM]		= Vec3(mins.x, maxs.y, mins.z);
+			eightCornerPoints[AABB3_FORWARD_LEFT_BOTTOM]	= Vec3(maxs.x, maxs.y, mins.z);
+			eightCornerPoints[AABB3_FORWARD_RIGHT_BOTTOM]	= Vec3(maxs.x, mins.y, mins.z);
+			eightCornerPoints[AABB3_FORWARD_RIGHT_TOP]		= Vec3(maxs.x, mins.y, maxs.z);
+			eightCornerPoints[AABB3_FORWARD_LEFT_TOP]		= maxs;
 
 			AABB2 topUVs = m_blocks[blockIndex].GetBlockTopSpriteUVs();
 			AABB2 bottomUVs = m_blocks[blockIndex].GetBlockBottomSpriteUVs();
 			AABB2 sideUVs = m_blocks[blockIndex].GetBlockSideSpriteUVs();
-
-			BlockIterator iter = BlockIterator(this, blockIndex);
-			Directions blockingDirections = iter.GetBlockingDirections(blockIndex);
 
 			// Neighbor Blocks
 			Block* posXBlock = iter.GetPosXBlock();
@@ -564,25 +468,6 @@ void Chunk::BuildChunkMesh()
 			// Positive X Face
 			if(!(blockingDirections & DIRECTION_POS_X))
 			{
-// 				Block* neighborBlock = iter.GetPosXBlock();
-// 
-// 				uint8_t outdoorLightInfluence	= neighborBlock->GetOutdoorLightInfluence();
-// 				uint8_t indoorLightInfluence	= neighborBlock->GetIndoorLightInfluence();
-// 
-// 				unsigned char r = GetColorChannelForLightInfluence(outdoorLightInfluence);
-// 				unsigned char g = GetColorChannelForLightInfluence(indoorLightInfluence);
-// 				unsigned char b = xFaceColor.r;
-// 
-// 				Rgba8 color(r, g, b, 255);
-// 
-// 				if(!g_enableLighting)
-// 				{
-// 					color = xFaceColor;
-// 				}
-// 
-// 				AddVertsForQuad3D(m_chunkVerts, m_indices, eightCornerPoints[AABB3_FORWARD_RIGHT_BOTTOM], eightCornerPoints[AABB3_FORWARD_LEFT_BOTTOM],
-// 								  eightCornerPoints[AABB3_FORWARD_LEFT_TOP], eightCornerPoints[AABB3_FORWARD_RIGHT_TOP], color, sideUVs);
-
 				BlockIterator posXNeighbor = iter.GetPosXBlockIterator();
 
 				Rgba8 frontLeftTopVertColor;
@@ -590,7 +475,15 @@ void Chunk::BuildChunkMesh()
 				Rgba8 frontRightTopVertColor;
 				Rgba8 frontRightBottomVertColor;
 
-				if(IsValidIterator(posXNeighbor))
+				if(!g_enableSmoothLighting)
+				{
+					Rgba8 faceLightColor = CalculateFaceLighting(posXBlock, xFaceColor);
+					frontLeftTopVertColor		= faceLightColor;
+					frontLeftBottomVertColor	= faceLightColor;
+					frontRightTopVertColor		= faceLightColor;
+					frontRightBottomVertColor	= faceLightColor;
+				}
+				else if(IsValidIterator(posXNeighbor))
 				{
 					Block* lightPosY = posXNeighbor.GetPosYBlock();
 					Block* lightPosZ = posXNeighbor.GetPosZBlock();
@@ -616,25 +509,6 @@ void Chunk::BuildChunkMesh()
 			// Negative X Face
 			if(!(blockingDirections & DIRECTION_NEG_X))
 			{
-// 				Block* neighborBlock = iter.GetNegXBlock();
-// 
-// 				uint8_t outdoorLightInfluence = neighborBlock->GetOutdoorLightInfluence();
-// 				uint8_t indoorLightInfluence =	neighborBlock->GetIndoorLightInfluence();
-// 
-// 				unsigned char r = GetColorChannelForLightInfluence(outdoorLightInfluence);
-// 				unsigned char g = GetColorChannelForLightInfluence(indoorLightInfluence);
-// 				unsigned char b = xFaceColor.r;
-// 
-// 				Rgba8 color(r, g, b, 255);
-// 
-// 				if(!g_enableLighting)
-// 				{
-// 					color = xFaceColor;
-// 				}
-// 
-// 				AddVertsForQuad3D(m_chunkVerts, m_indices, eightCornerPoints[AABB3_BACK_LEFT_BOTTOM], eightCornerPoints[AABB3_BACK_RIGHT_BOTTOM],
-// 								  eightCornerPoints[AABB3_BACK_RIGHT_TOP], eightCornerPoints[AABB3_BACK_LEFT_TOP], color, sideUVs);
-
 				BlockIterator negXNeighbor = iter.GetNegXBlockIterator();
 
 				Rgba8 backLeftTopVertColor;
@@ -642,7 +516,15 @@ void Chunk::BuildChunkMesh()
 				Rgba8 backRightTopVertColor;
 				Rgba8 backRightBottomVertColor;
 
-				if(IsValidIterator(negXNeighbor))
+				if(!g_enableSmoothLighting)
+				{
+					Rgba8 faceLightColor = CalculateFaceLighting(negXBlock, xFaceColor);
+					backLeftTopVertColor		= faceLightColor;
+					backLeftBottomVertColor		= faceLightColor;
+					backRightTopVertColor		= faceLightColor;
+					backRightBottomVertColor	= faceLightColor;
+				}
+				else if(IsValidIterator(negXNeighbor))
 				{
 					Block* lightPosY = negXNeighbor.GetPosYBlock();
 					Block* lightPosZ = negXNeighbor.GetPosZBlock();
@@ -667,25 +549,6 @@ void Chunk::BuildChunkMesh()
 			// Positive Y Face
 			if(!(blockingDirections & DIRECTION_POS_Y))
 			{
-// 				Block* neighborBlock = iter.GetPosYBlock();
-// 
-// 				uint8_t outdoorLightInfluence	= neighborBlock->GetOutdoorLightInfluence();
-// 				uint8_t indoorLightInfluence	= neighborBlock->GetIndoorLightInfluence();
-// 
-// 				unsigned char r = GetColorChannelForLightInfluence(outdoorLightInfluence);
-// 				unsigned char g = GetColorChannelForLightInfluence(indoorLightInfluence);
-// 				unsigned char b = yFaceColor.r;
-// 
-// 				Rgba8 color(r, g, b, 255);
-// 
-// 				if(!g_enableLighting)
-// 				{
-// 					color = yFaceColor;
-// 				}
-// 
-// 				AddVertsForQuad3D(m_chunkVerts, m_indices, eightCornerPoints[AABB3_FORWARD_LEFT_BOTTOM], eightCornerPoints[AABB3_BACK_LEFT_BOTTOM],
-// 								  eightCornerPoints[AABB3_BACK_LEFT_TOP], eightCornerPoints[AABB3_FORWARD_LEFT_TOP], color, sideUVs
-				
 				BlockIterator posYNeighbor = iter.GetPosYBlockIterator();
 
 				Rgba8 backLeftTopVertColor;
@@ -693,7 +556,15 @@ void Chunk::BuildChunkMesh()
 				Rgba8 frontLeftBottomVertColor;
 				Rgba8 frontLeftTopVertColor;
 
-				if(IsValidIterator(posYNeighbor))
+				if(!g_enableSmoothLighting)
+				{
+					Rgba8 faceLightColor = CalculateFaceLighting(posYBlock, yFaceColor);
+					backLeftTopVertColor		= faceLightColor;
+					backLeftBottomVertColor		= faceLightColor;
+					frontLeftBottomVertColor	= faceLightColor;
+					frontLeftTopVertColor		= faceLightColor;
+				}
+				else if(IsValidIterator(posYNeighbor))
 				{
 					Block* lightPosX = posYNeighbor.GetPosXBlock();
 					Block* lightPosZ = posYNeighbor.GetPosZBlock();
@@ -718,25 +589,6 @@ void Chunk::BuildChunkMesh()
 			// Negative Y Face
 			if(!(blockingDirections & DIRECTION_NEG_Y))
 			{
-// 				Block* neighborBlock = iter.GetNegYBlock();
-// 
-// 				uint8_t outdoorLightInfluence	= neighborBlock->GetOutdoorLightInfluence();
-// 				uint8_t indoorLightInfluence	= neighborBlock->GetIndoorLightInfluence();
-// 
-// 				unsigned char r = GetColorChannelForLightInfluence(outdoorLightInfluence);
-// 				unsigned char g = GetColorChannelForLightInfluence(indoorLightInfluence);
-// 				unsigned char b = yFaceColor.r;
-// 
-// 				Rgba8 color(r, g, b, 255);
-// 
-// 				if(!g_enableLighting)
-// 				{
-// 					color = yFaceColor;
-// 				}
-// 
-// 				AddVertsForQuad3D(m_chunkVerts, m_indices, eightCornerPoints[AABB3_BACK_RIGHT_BOTTOM], eightCornerPoints[AABB3_FORWARD_RIGHT_BOTTOM],
-// 								  eightCornerPoints[AABB3_FORWARD_RIGHT_TOP], eightCornerPoints[AABB3_BACK_RIGHT_TOP], color, sideUVs);
-
 				BlockIterator negYNeighbor = iter.GetNegYBlockIterator();
 
 				Rgba8 backRightTopVertColor;
@@ -744,7 +596,15 @@ void Chunk::BuildChunkMesh()
 				Rgba8 frontRightBottomVertColor;
 				Rgba8 frontRightTopVertColor;
 
-				if(IsValidIterator(negYNeighbor))
+				if(!g_enableSmoothLighting)
+				{
+					Rgba8 faceLightColor = CalculateFaceLighting(negYBlock, yFaceColor);
+					backRightTopVertColor		= faceLightColor;
+					backRightBottomVertColor	= faceLightColor;
+					frontRightBottomVertColor	= faceLightColor;
+					frontRightTopVertColor		= faceLightColor;
+				}
+				else if(IsValidIterator(negYNeighbor))
 				{
 					Block* lightPosX = negYNeighbor.GetPosXBlock();
 					Block* lightPosZ = negYNeighbor.GetPosZBlock();
@@ -769,31 +629,6 @@ void Chunk::BuildChunkMesh()
 			// Positive Z Face
 			if(!(blockingDirections & DIRECTION_POS_Z))
 			{
-// 				IntVec3 localCoord = IndexToLocalCoords(blockIndex);
-// 				uint8_t outdoorLightInfluence = 0;
-// 				uint8_t indoorLightInfluence = 0;
-// 
-// 				if(localCoord.z < CHUNK_MAX_Z)
-// 				{
-// 					Block* neighborBlock = iter.GetPosZBlock();
-// 					outdoorLightInfluence	= neighborBlock->GetOutdoorLightInfluence();
-// 					indoorLightInfluence	= neighborBlock->GetIndoorLightInfluence();
-// 				}
-// 
-// 				unsigned char r = GetColorChannelForLightInfluence(outdoorLightInfluence);
-// 				unsigned char g = GetColorChannelForLightInfluence(indoorLightInfluence);
-// 				unsigned char b = zFaceColor.r;
-// 
-// 				Rgba8 color(r, g, b, 255);
-// 
-// 				if(!g_enableLighting)
-// 				{
-// 					color = zFaceColor;
-// 				}
-//				
-//				AddVertsForQuad3D(m_chunkVerts, m_indices, eightCornerPoints[AABB3_BACK_RIGHT_TOP], eightCornerPoints[AABB3_FORWARD_RIGHT_TOP], eightCornerPoints[AABB3_FORWARD_LEFT_TOP], 
-//									eightCornerPoints[AABB3_BACK_LEFT_TOP], color, topUVs);
-
 				IntVec3 localCoord = IndexToLocalCoords(blockIndex);
 
 				Rgba8 topLeftVertColor;
@@ -802,7 +637,15 @@ void Chunk::BuildChunkMesh()
 				Rgba8 bottomRightVertColor;
 
 
-				if(localCoord.z < CHUNK_MAX_Z)
+				if(!g_enableSmoothLighting)
+				{
+					Rgba8 faceLightColor = CalculateFaceLighting(posZBlock, zFaceColor);
+					topLeftVertColor		= faceLightColor;
+					topRightVertColor		= faceLightColor;
+					bottomLeftVertColor		= faceLightColor;
+					bottomRightVertColor	= faceLightColor;
+				}
+				else if(localCoord.z < CHUNK_MAX_Z)
 				{
 					IntVec3 posZCoord = localCoord + IntVec3::UP;
 					uint32_t posZIndex = LocalCoordsToIndex(posZCoord);
@@ -832,31 +675,6 @@ void Chunk::BuildChunkMesh()
 			// Negative Z Face
 			if(!(blockingDirections & DIRECTION_NEG_Z))
 			{
-// 				IntVec3 localCoord = IndexToLocalCoords(blockIndex);
-// 				uint8_t outdoorLightInfluence = 0;
-// 				uint8_t indoorLightInfluence = 0;
-// 
-// 				if(localCoord.z > 0)
-// 				{
-// 					Block* neighborBlock = iter.GetNegZBlock();
-// 					outdoorLightInfluence	= neighborBlock->GetOutdoorLightInfluence();
-// 					indoorLightInfluence	= neighborBlock->GetIndoorLightInfluence();
-// 				}
-// 
-// 				unsigned char r = GetColorChannelForLightInfluence(outdoorLightInfluence);
-// 				unsigned char g = GetColorChannelForLightInfluence(indoorLightInfluence);
-// 				unsigned char b = zFaceColor.r;
-// 
-// 				Rgba8 color(r, g, b, 255);
-// 
-// 				if(!g_enableLighting)
-// 				{
-// 					color = zFaceColor;
-// 				}
-// 
-// 				AddVertsForQuad3D(m_chunkVerts, m_indices, eightCornerPoints[AABB3_FORWARD_RIGHT_BOTTOM], eightCornerPoints[AABB3_BACK_RIGHT_BOTTOM],
-// 								  eightCornerPoints[AABB3_BACK_LEFT_BOTTOM], eightCornerPoints[AABB3_FORWARD_LEFT_BOTTOM], color, bottomUVs);
-
 				IntVec3 localCoord = IndexToLocalCoords(blockIndex);
 
 				Rgba8 forwardRightBottomVertColor;
@@ -864,14 +682,22 @@ void Chunk::BuildChunkMesh()
 				Rgba8 backLeftBottom;
 				Rgba8 forwardLeftBottom;
 
-				if(localCoord.z > 0)
+				if(!g_enableSmoothLighting)
+				{
+					Rgba8 faceLightColor = CalculateFaceLighting(negZBlock, zFaceColor);
+					forwardRightBottomVertColor = faceLightColor;
+					backRightBottomVertColor	= faceLightColor;
+					backLeftBottom				= faceLightColor;
+					forwardLeftBottom			= faceLightColor;
+				}
+				else if(localCoord.z > 0)
 				{
 					IntVec3 negZCoord = localCoord + IntVec3::DOWN;
 					uint32_t negZIndex = LocalCoordsToIndex(negZCoord);
 
 					BlockIterator negZIter = BlockIterator(this, negZIndex);
 
-					Block* lightPosX = negZIter.GetNegXBlock();
+					Block* lightPosX = negZIter.GetPosXBlock();
 					Block* lightPosY = negZIter.GetPosYBlock();
 					Block* lightNegX = negZIter.GetNegXBlock();
 					Block* lightNegY = negZIter.GetNegYBlock();
@@ -898,8 +724,27 @@ void Chunk::BuildChunkMesh()
 	unsigned int vboSize = sizeof(Vertex_PCUTBN) * static_cast<unsigned int>(m_chunkVerts.size());
 	unsigned int iboSize = sizeof(unsigned int) * static_cast<unsigned int>(m_indices.size());
 
-	m_vertexBuffer = g_theRenderer->CreateVertexBuffer(sizeof(Vertex_PCUTBN), sizeof(Vertex_PCUTBN));
-	m_indexBuffer = g_theRenderer->CreateIndexBuffer(sizeof(unsigned int), sizeof(unsigned int));
+	if(m_indices.empty())
+	{
+		delete m_vertexBuffer;
+		m_vertexBuffer = nullptr;
+
+		delete m_indexBuffer;
+		m_indexBuffer = nullptr;
+
+		m_chunkState = ChunkState::ACTIVE;
+		return;
+	}
+
+	if(!m_vertexBuffer)
+	{
+		m_vertexBuffer = g_theRenderer->CreateVertexBuffer(vboSize, sizeof(Vertex_PCUTBN));
+	}
+
+	if(!m_indexBuffer)
+	{
+		m_indexBuffer = g_theRenderer->CreateIndexBuffer(iboSize, sizeof(unsigned int));
+	}
 
 	g_theRenderer->CopyCPUToGPU(m_chunkVerts.data(), vboSize, m_vertexBuffer);
 	g_theRenderer->CopyCPUToGPU(m_indices.data(), iboSize, m_indexBuffer);
@@ -920,32 +765,43 @@ Rgba8 Chunk::CalculateVertexLighting(Block* sideA, Block* sideB, Block* corner, 
 	float cornerIndoorInfluence = 0.f;
 	float centerIndoorInfluence = 0.f;
 
+	float numSamples = 0.f;
+
 	if(sideA)
 	{
 		sideAOutdoorInfluence = static_cast<float>(sideA->GetOutdoorLightInfluence());
 		sideAIndoorInfluence = static_cast<float>(sideA->GetIndoorLightInfluence());
+		numSamples += 1.f;
 	}
-	
+
 	if(sideB)
 	{
 		sideBOutdoorInfluence = static_cast<float>(sideB->GetOutdoorLightInfluence());
 		sideBIndoorInfluence = static_cast<float>(sideB->GetIndoorLightInfluence());
+		numSamples += 1.f;
 	}
-	
+
 	if(center)
 	{
 		centerOutdoorInfluence = static_cast<float>(center->GetOutdoorLightInfluence());
 		centerIndoorInfluence = static_cast<float>(center->GetIndoorLightInfluence());
+		numSamples += 1.f;
 	}
-	
+
 	if(corner)
 	{
 		cornerOutdoorInfluence = static_cast<float>(corner->GetOutdoorLightInfluence());
 		cornerIndoorInfluence = static_cast<float>(corner->GetIndoorLightInfluence());
+		numSamples += 1.f;
 	}
-	
-	float avgOutdoorInfluence = (sideAOutdoorInfluence + sideBOutdoorInfluence + cornerOutdoorInfluence + centerOutdoorInfluence) / 4.f;
-	float avgIndoorInfluence = (sideAIndoorInfluence + sideBIndoorInfluence + cornerIndoorInfluence + centerIndoorInfluence) / 4.f;
+
+	if(numSamples == 0.f)
+	{
+		numSamples = 1.f;
+	}
+
+	float avgOutdoorInfluence = (sideAOutdoorInfluence + sideBOutdoorInfluence + cornerOutdoorInfluence + centerOutdoorInfluence) / numSamples;
+	float avgIndoorInfluence = (sideAIndoorInfluence + sideBIndoorInfluence + cornerIndoorInfluence + centerIndoorInfluence) / numSamples;
 
 	uint8_t outdoorInfluence = static_cast<uint8_t>(avgOutdoorInfluence);
 	uint8_t indoorInfluence = static_cast<uint8_t>(avgIndoorInfluence);
@@ -955,6 +811,30 @@ Rgba8 Chunk::CalculateVertexLighting(Block* sideA, Block* sideB, Block* corner, 
 	unsigned char color = faceColor.r;
 
 	return Rgba8(outdoorColorChannel, indoorColorChannel, color, 255);
+}
+
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Rgba8 Chunk::CalculateFaceLighting(Block* neighbor, Rgba8 faceColor)
+{
+	if(!g_enableLighting)
+	{
+		return faceColor;
+	}
+
+	uint8_t outdoorLightInfluence	= 0;
+	uint8_t indoorLightInfluence	= 0;
+
+	if(neighbor)
+	{
+		outdoorLightInfluence	= neighbor->GetOutdoorLightInfluence();
+		indoorLightInfluence	= neighbor->GetIndoorLightInfluence();
+	}
+
+	unsigned char r = GetColorChannelForLightInfluence(outdoorLightInfluence);
+	unsigned char g = GetColorChannelForLightInfluence(indoorLightInfluence);
+	unsigned char b = faceColor.r;
+
+	return Rgba8(r, g, b, 255);
 }
 
 //------------------------------------------------------------------------------------------------------------------
@@ -1082,9 +962,9 @@ void Chunk::RemoveNeighbor(Chunk* chunk)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForNonInlandBiomeBlock(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForNonInlandBiomeBlock(BiomeGenParams const& params)
 {   
-    std::string blockType = params.m_blockBeforeReplacement;
+    unsigned char blockType = params.m_blockBeforeReplacement;
 
 	Continentalness continentType = GetContinentalnessLevel(params.m_continentalness);
 
@@ -1114,7 +994,7 @@ std::string Chunk::GetBlockTypeForNonInlandBiomeBlock(BiomeGenParams const& para
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForDeepOceanBiomeBlock(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForDeepOceanBiomeBlock(BiomeGenParams const& params)
 {
 	if(params.m_blockZ == params.m_height)
 	{
@@ -1122,32 +1002,32 @@ std::string Chunk::GetBlockTypeForDeepOceanBiomeBlock(BiomeGenParams const& para
 		{
 			if(params.m_temperature < 0.f)
 			{
-				return "Snow";
+				return g_blockTypes.m_snow;
 			}
 			else
 			{
-				return "Sand";
+				return g_blockTypes.m_sand;
 			}
 		}
-		else if(params.m_blockZ == SEA_LEVEL_Z && params.m_blockBeforeReplacement == "Water" && params.m_temperature < 0.f)
-			return "Ice";
+		else if(params.m_blockZ == SEA_LEVEL_Z && params.m_blockBeforeReplacement == g_blockTypes.m_water && params.m_temperature < 0.f)
+			return g_blockTypes.m_ice;
 	}
 
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForOceanBiomeBlock(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForOceanBiomeBlock(BiomeGenParams const& params)
 {
 	if(params.m_blockZ == params.m_height)
 	{
 		if(params.m_blockZ > SEA_LEVEL_Z)
 		{
-			return "Sand";
+			return g_blockTypes.m_sand;
 		}
 		else if(params.m_blockZ < SEA_LEVEL_Z)
 		{
-			return "Dirt";
+			return g_blockTypes.m_dirt;
 		}
 	}
 
@@ -1155,7 +1035,7 @@ std::string Chunk::GetBlockTypeForOceanBiomeBlock(BiomeGenParams const& params)
 	{
 		if(params.m_blockZ > SEA_LEVEL_Z && params.m_blockZ < params.m_height - params.m_dirtDepth)
 		{
-			return "Dirt";
+			return g_blockTypes.m_dirt;
 		}
 	}
 
@@ -1165,17 +1045,17 @@ std::string Chunk::GetBlockTypeForOceanBiomeBlock(BiomeGenParams const& params)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForFrozenOceanBiomeBlock(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForFrozenOceanBiomeBlock(BiomeGenParams const& params)
 {
 	if(params.m_blockZ == params.m_height)
 	{
 		if(params.m_blockZ > SEA_LEVEL_Z)
 		{
-			return "Snow";
+			return g_blockTypes.m_snow;
 		}
-		else if(params.m_blockZ == SEA_LEVEL_Z && params.m_blockBeforeReplacement == "Water")
+		else if(params.m_blockZ == SEA_LEVEL_Z && params.m_blockBeforeReplacement == g_blockTypes.m_water)
 		{
-			return "Ice";
+			return g_blockTypes.m_ice;
 		}
 	}
 
@@ -1183,7 +1063,7 @@ std::string Chunk::GetBlockTypeForFrozenOceanBiomeBlock(BiomeGenParams const& pa
 	{
 		if(params.m_blockZ > SEA_LEVEL_Z && params.m_blockZ < params.m_height - params.m_dirtDepth)
 		{
-			return "Snow";
+			return g_blockTypes.m_snow;
 		}
 	}
 
@@ -1191,7 +1071,7 @@ std::string Chunk::GetBlockTypeForFrozenOceanBiomeBlock(BiomeGenParams const& pa
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForInlandBiomeBlock(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForInlandBiomeBlock(BiomeGenParams const& params)
 {
 	InlandBiomeType biomeType = GetInlandBiomeTypeForContinentalness(params.m_continentalness);
 
@@ -1211,7 +1091,7 @@ std::string Chunk::GetBlockTypeForInlandBiomeBlock(BiomeGenParams const& params)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForCoastBiomeBlock(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForCoastBiomeBlock(BiomeGenParams const& params)
 {
 	PeaksAndValleysLevel pvLevel = GetPeaksAndValleysLevel(params.m_peaksAndValleys);
 	ErosionLevel erosionLevel = GetErosionLevel(params.m_erosion);
@@ -1271,7 +1151,7 @@ std::string Chunk::GetBlockTypeForCoastBiomeBlock(BiomeGenParams const& params)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForNearInlandBiomeBlock(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForNearInlandBiomeBlock(BiomeGenParams const& params)
 {
 	PeaksAndValleysLevel pvLevel = GetPeaksAndValleysLevel(params.m_peaksAndValleys);
 	ErosionLevel erosionLevel = GetErosionLevel(params.m_erosion);
@@ -1365,7 +1245,7 @@ std::string Chunk::GetBlockTypeForNearInlandBiomeBlock(BiomeGenParams const& par
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForMidInlandBiomeBlock(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForMidInlandBiomeBlock(BiomeGenParams const& params)
 {
 	PeaksAndValleysLevel pvLevel = GetPeaksAndValleysLevel(params.m_peaksAndValleys);
 	ErosionLevel erosionLevel = GetErosionLevel(params.m_erosion);
@@ -1477,7 +1357,7 @@ std::string Chunk::GetBlockTypeForMidInlandBiomeBlock(BiomeGenParams const& para
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForFarInlandBiomeBlock(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForFarInlandBiomeBlock(BiomeGenParams const& params)
 {
 	PeaksAndValleysLevel pvLevel = GetPeaksAndValleysLevel(params.m_peaksAndValleys);
 	ErosionLevel erosionLevel = GetErosionLevel(params.m_erosion);
@@ -1562,7 +1442,7 @@ std::string Chunk::GetBlockTypeForFarInlandBiomeBlock(BiomeGenParams const& para
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForBeachBiomes(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForBeachBiomes(BiomeGenParams const& params)
 {
 	if(g_t0Range.IsOnRange(params.m_temperature))
 	{
@@ -1579,44 +1459,44 @@ std::string Chunk::GetBlockTypeForBeachBiomes(BiomeGenParams const& params)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForSnowyBeach(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForSnowyBeach(BiomeGenParams const& params)
 {
 	if(params.m_blockZ == params.m_height)
 	{
-		return "Snow";
+		return g_blockTypes.m_snow;
 	}
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForNormalBeachBiome(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForNormalBeachBiome(BiomeGenParams const& params)
 {
 	if(params.m_blockZ == params.m_height)
 	{
-		return "Sand";
+		return g_blockTypes.m_sand;
 	}
 
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForDesertBiome(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForDesertBiome(BiomeGenParams const& params)
 {
 	int sandDepth = params.m_dirtDepth * 3;
 	if(params.m_blockZ == params.m_height || params.m_blockZ >= params.m_height - sandDepth)
 	{
-		return "Sand";
+		return g_blockTypes.m_sand;
 	}
 	else if(params.m_blockZ < params.m_height - sandDepth && params.m_blockZ > params.m_height - (params.m_dirtDepth + sandDepth))
 	{
-		return "Dirt";
+		return g_blockTypes.m_dirt;
 	}
 
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForMiddleBiomes(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForMiddleBiomes(BiomeGenParams const& params)
 {
 	if(g_t4Range.IsOnRange(params.m_temperature))
 	{
@@ -1687,120 +1567,123 @@ std::string Chunk::GetBlockTypeForMiddleBiomes(BiomeGenParams const& params)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForSnowyPlains(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForSnowyPlains(BiomeGenParams const& params)
 {
-	
-	if(params.m_blockZ == params.m_height)
+	int snowDepth = GetMax(1, params.m_dirtDepth / 2);
+
+	if(params.m_blockZ <= params.m_height && params.m_blockZ > params.m_height - snowDepth)
 	{
-		return "Snow";
+		return g_blockTypes.m_snow;
 	}
 	else if(params.m_blockZ <params.m_height && params.m_blockZ >= params.m_height - params.m_dirtDepth)
 	{
-		return "Dirt";
+		return g_blockTypes.m_dirt;
 	}
 	else if(params.m_blockZ == SEA_LEVEL_Z)
 	{
-		return "Water";
+		return g_blockTypes.m_water;
 	}
 
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForSnowyTaiga(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForSnowyTaiga(BiomeGenParams const& params)
 {
-	if(params.m_blockZ == static_cast<int>(params.m_height))
-	{	
-		return "Snow";
+	int snowDepth = GetMax(1, params.m_dirtDepth / 2);
+
+	if(params.m_blockZ <= static_cast<int>(params.m_height) && params.m_blockZ > static_cast<int>(params.m_height) - snowDepth)
+	{
+		return g_blockTypes.m_snow;
 	}
 	else if(params.m_blockZ < static_cast<int>(params.m_height) && params.m_blockZ >= static_cast<int>(params.m_height) - params.m_dirtDepth)
 	{
-		return "Dirt";
+		return g_blockTypes.m_dirt;
 	}
 	else if(params.m_blockZ == SEA_LEVEL_Z)
 	{
-		return "Ice";
+		return g_blockTypes.m_ice;
 	}
 
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForTaiga(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForTaiga(BiomeGenParams const& params)
 {
 	if(params.m_blockZ == static_cast<int>(params.m_height))
 	{
-		return "GrassLight";
+		return g_blockTypes.m_grassLight;
 	}
 	else if(params.m_blockZ < static_cast<int>(params.m_height) && params.m_blockZ >= static_cast<int>(params.m_height) - params.m_dirtDepth)
 	{
-		return "Dirt";
+		return g_blockTypes.m_dirt;
 	}
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForPlains(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForPlains(BiomeGenParams const& params)
 {
 	if(params.m_blockZ == static_cast<int>(params.m_height))
 	{
-		return "GrassLight";
+		return g_blockTypes.m_grassLight;
 	}
 	else if(params.m_blockZ < static_cast<int>(params.m_height) && params.m_blockZ >= static_cast<int>(params.m_height) - params.m_dirtDepth)
 	{
-		return "Dirt";
+		return g_blockTypes.m_dirt;
 	}
 
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForForest(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForForest(BiomeGenParams const& params)
 {
 	if(params.m_blockZ == static_cast<int>(params.m_height))
 	{
-		return "Grass";
+		return g_blockTypes.m_grass;
 	}
 	else if(params.m_blockZ < static_cast<int>(params.m_height) && params.m_blockZ >= static_cast<int>(params.m_height) - params.m_dirtDepth)
 	{
-		return "Dirt";
+		return g_blockTypes.m_dirt;
 	}
 
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForJungle(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForJungle(BiomeGenParams const& params)
 {
 	if(params.m_blockZ == static_cast<int>(params.m_height))
 	{
-		return "GrassDark";
+		return g_blockTypes.m_grassDark;
 	}
 	else if(params.m_blockZ < static_cast<int>(params.m_height) && params.m_blockZ >= static_cast<int>(params.m_height) - params.m_dirtDepth)
 	{
-		return "Dirt";
+		return g_blockTypes.m_dirt;
 	}
 
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForSavanna(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForSavanna(BiomeGenParams const& params)
 {
 	if(params.m_blockZ == static_cast<int>(params.m_height))
 	{
-		return "GrassYellow";
+		return g_blockTypes.m_grassYellow;
 	}
 	else if(params.m_blockZ < static_cast<int>(params.m_height) && params.m_blockZ >= static_cast<int>(params.m_height) - params.m_dirtDepth)
 	{
-		return "Dirt";
+		return g_blockTypes.m_dirt;
 	}
 	return params.m_blockBeforeReplacement;
 
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForBadlandBiomes(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForBadlandBiomes(BiomeGenParams const& params)
 {
 	
 	if(g_h3Range.IsOnRange(params.m_humidity) || g_h4Range.IsOnRange(params.m_humidity))
@@ -1814,18 +1697,18 @@ std::string Chunk::GetBlockTypeForBadlandBiomes(BiomeGenParams const& params)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForStoneyPeaks(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForStoneyPeaks(BiomeGenParams const& params)
 {
 	return params.m_blockBeforeReplacement;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string Chunk::GetBlockTypeForSnowyPeaks(BiomeGenParams const& params)
+unsigned char Chunk::GetBlockTypeForSnowyPeaks(BiomeGenParams const& params)
 {
-	if(params.m_blockZ == params.m_height)
-		return "Snow";
-	else if(params.m_blockZ == SEA_LEVEL_Z && params.m_blockBeforeReplacement == "Water")
-		return "Ice";
+	if(params.m_blockZ <= params.m_height && params.m_blockZ >= params.m_height - params.m_dirtDepth)
+		return g_blockTypes.m_snow;
+	else if(params.m_blockZ == SEA_LEVEL_Z && params.m_blockBeforeReplacement == g_blockTypes.m_water)
+		return g_blockTypes.m_ice;
 
 	return params.m_blockBeforeReplacement;
 }
@@ -1833,26 +1716,17 @@ std::string Chunk::GetBlockTypeForSnowyPeaks(BiomeGenParams const& params)
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 InlandBiomeType Chunk::GetInlandBiomeTypeForContinentalness(float continentalness)
 {
-	FloatRange coastRange = FloatRange(g_coastCurve.m_start, g_coastCurve.m_end);
-	FloatRange nearInlandRange = FloatRange(g_nearInlandCurve.m_start, g_nearInlandCurve.m_end);
-	FloatRange midInlandRange = FloatRange(g_midInlandCurve.m_start, g_midInlandCurve.m_end);
-	FloatRange farInlandRange = FloatRange(g_farInlandCurve.m_start, g_farInlandCurve.m_end);
-
-	if(coastRange.IsOnRange(continentalness))
+	if(continentalness < g_nearInlandCurve.m_start)
 	{
 		return InlandBiomeType_Coast;
 	}
-	else if(nearInlandRange.IsOnRange(continentalness))
+	else if(continentalness < g_midInlandCurve.m_start)
 	{
 		return InlandBiomeType_NearInland;
 	}
-	else if(midInlandRange.IsOnRange(continentalness))
+	else if(continentalness < g_farInlandCurve.m_start)
 	{
 		return InlandBiomeType_MidInland;
-	}
-	else if(farInlandRange.IsOnRange(continentalness))
-	{
-		return InlandBiomeType_FarInland;
 	}
 
 	return InlandBiomeType_FarInland;
@@ -1861,92 +1735,70 @@ InlandBiomeType Chunk::GetInlandBiomeTypeForContinentalness(float continentalnes
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 PeaksAndValleysLevel Chunk::GetPeaksAndValleysLevel(float pvValue)
 {
-	FloatRange valleyRange = FloatRange(g_weirdnessValleys.m_start, g_weirdnessValleys.m_end);
-	FloatRange lowRange = FloatRange(g_weirdnessLow.m_start, g_weirdnessLow.m_end);
-	FloatRange midRange = FloatRange(g_weirdnessMid.m_start, g_weirdnessMid.m_end);
-	FloatRange highRange = FloatRange(g_weirdnessHigh.m_start, g_weirdnessHigh.m_end);
-	FloatRange peakRange = FloatRange(g_weirdnessPeaks.m_start, g_weirdnessPeaks.m_end);
-
-	if(valleyRange.IsOnRange(pvValue))
+	if(pvValue < g_weirdnessLow.m_start)
 	{
 		return PV_Valley;
 	}
-	else if(lowRange.IsOnRange(pvValue))
+	else if(pvValue < g_weirdnessMid.m_start)
 	{
 		return PV_Low;
 	}
-	else if(midRange.IsOnRange(pvValue))
+	else if(pvValue < g_weirdnessHigh.m_start)
 	{
 		return PV_Mid;
 	}
-	else if(highRange.IsOnRange(pvValue))
+	else if(pvValue < g_weirdnessPeaks.m_start)
 	{
 		return PV_High;
 	}
-	else if(peakRange.IsOnRange(pvValue))
-	{
-		return PV_Peak;
-	}
 
-	return PV_Mid;
+	return PV_Peak;
 }
 
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ErosionLevel Chunk::GetErosionLevel(float erosionValue)
 {
-	FloatRange l0Range = FloatRange(g_erosionL0.m_start, g_erosionL0.m_end);
-	FloatRange l1Range = FloatRange(g_erosionL1.m_start, g_erosionL1.m_end);
-	FloatRange l2Range = FloatRange(g_erosionL2.m_start, g_erosionL2.m_end);
-	FloatRange l3Range = FloatRange(g_erosionL3.m_start, g_erosionL3.m_end);
-	FloatRange l4Range = FloatRange(g_erosionL4.m_start, g_erosionL4.m_end);
-	FloatRange l5Range = FloatRange(g_erosionL5.m_start, g_erosionL5.m_end);
-	FloatRange l6Range = FloatRange(g_erosionL6.m_start, g_erosionL6.m_end);
-
-	if(l0Range.IsOnRange(erosionValue))
+	if(erosionValue < g_erosionL1.m_start)
 	{
 		return ErosionLevel_L0;
 	}
-	else if(l1Range.IsOnRange(erosionValue))
+	else if(erosionValue < g_erosionL2.m_start)
 	{
 		return ErosionLevel_L1;
 	}
-	else if(l2Range.IsOnRange(erosionValue))
+	else if(erosionValue < g_erosionL3.m_start)
 	{
 		return ErosionLevel_L2;
 	}
-	else if(l3Range.IsOnRange(erosionValue))
+	else if(erosionValue < g_erosionL4.m_start)
 	{
 		return ErosionLevel_L3;
 	}
-	else if(l4Range.IsOnRange(erosionValue))
+	else if(erosionValue < g_erosionL5.m_start)
 	{
 		return ErosionLevel_L4;
 	}
-	else if(l5Range.IsOnRange(erosionValue))
+	else if(erosionValue < g_erosionL6.m_start)
 	{
 		return ErosionLevel_L5;
 	}
-	else if(l6Range.IsOnRange(erosionValue))
-	{
-		return ErosionLevel_L6;
-	}
 
-	return ErosionLevel_L3;
+	return ErosionLevel_L6;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Continentalness Chunk::GetContinentalnessLevel(float value)
 {
-	if(value < g_deepOceanCurve.m_end)
+	if(value < g_oceanCurve.m_start)
 		return Continentalness_DeepOcean;
-	if(value < g_oceanCurve.m_end)
+	if(value < g_coastCurve.m_start)
 		return Continentalness_Ocean;
-	if(value < g_coastCurve.m_end)
+	if(value < g_nearInlandCurve.m_start)
 		return Continentalness_Coast;
-	if(value < g_nearInlandCurve.m_end)
+	if(value < g_midInlandCurve.m_start)
 		return Continentalness_NearInland;
-	if(value < g_midInlandCurve.m_end)
+	if(value < g_farInlandCurve.m_start)
 		return Continentalness_MidInland;
 	return Continentalness_FarInland;
 }
@@ -2099,7 +1951,7 @@ inline bool Chunk::IsValidNeighbour(Neighbours neighbourDirection)
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Chunk::RemoveBlock(uint32_t blockIndex)
 {
-	m_blocks[blockIndex].m_blockDefinitionIndex = BlockDefinition::GetBlockDefinitionIndex("Air");
+	m_blocks[blockIndex].m_blockDefinitionIndex = g_blockTypes.m_air;
 	Game::GetWorld()->MarkChunkDirty(this);
 	MarkNeighborsDirty(IndexToLocalCoords(blockIndex));
 	m_isModified = true;
@@ -2207,7 +2059,7 @@ void Chunk::InitializeLighting()
 	}
 
 	// Glowstone Loop
-	unsigned char glowstoneIndex = BlockDefinition::GetBlockDefinitionIndex("Glowstone");
+	unsigned char glowstoneIndex = g_blockTypes.m_glowstone;
 	for(uint32_t i = 0; i < BLOCKS_PER_CHUNK; i++)
 	{
 		if(m_blocks[i].m_blockDefinitionIndex == glowstoneIndex)
@@ -2336,7 +2188,7 @@ bool Chunk::IsBlockOpaque(uint32_t blockIndex) const
 //------------------------------------------------------------------------------------------------------------------
 bool Chunk::IsBlockWater(uint32_t blockIndex) const
 {
-    return m_blocks[blockIndex].m_blockDefinitionIndex == BlockDefinition::GetBlockDefinitionIndex("Water");
+    return m_blocks[blockIndex].m_blockDefinitionIndex == g_blockTypes.m_water;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -50,4 +50,5 @@ public:
 	CameraMode			m_cameraMode = CAMERA_FIRST_PERSON;
 
 	Entity*				m_followingEntity = nullptr;
+	bool				m_isFlythroughEnabled = false;
 };

@@ -63,6 +63,8 @@ public:
 	BlockIterator GetNegXPosYBlockIterator();
 	BlockIterator GetNegXNegYBlockIterator();
 
+	BlockIterator GetOffsetBlockIterator(int offsetX, int offsetY, int offsetZ);
+
 	Block& GetBlockRef();
 	unsigned char GetBlockType();
 

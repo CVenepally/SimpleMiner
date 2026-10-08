@@ -43,6 +43,7 @@ extern bool g_computePeaksAndValley;
 extern bool g_lockTerrainGenerationToOrigin;
 extern bool g_enableSurfaceBlockReplacement;
 extern bool g_enableLighting;
+extern bool g_enableSmoothLighting;
 extern bool g_enableDiggingAndPlacing;
 extern bool g_enableCrossChunkHiddenSurfaceRemoval;
 
@@ -95,6 +96,7 @@ constexpr int BLOCKS_PER_CHUNK = CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
 	constexpr int MAX_CHUNK_MESHES_TO_BUILD = 2;
 	constexpr int MAX_CHUNKS_TO_ACTIVATE = 2;
 	constexpr int MAX_CHUNKS_TO_DEACTIVATE = 4;
+	constexpr int MAX_CHUNKS_TO_CREATE = 8;
 	constexpr int MAX_DIRTY_LIGHT_BLOCKS_PER_FRAME = 4096;
 	constexpr int MAX_DIRTY_LIGHT_BACKLOG = 8192;
 #else
@@ -104,6 +106,7 @@ constexpr int BLOCKS_PER_CHUNK = CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
 	constexpr int MAX_CHUNK_MESHES_TO_BUILD = 2;
 	constexpr int MAX_CHUNKS_TO_ACTIVATE = 2;
 	constexpr int MAX_CHUNKS_TO_DEACTIVATE = 8;
+	constexpr int MAX_CHUNKS_TO_CREATE = 32;
 	constexpr int MAX_DIRTY_LIGHT_BLOCKS_PER_FRAME = 16384;
 	constexpr int MAX_DIRTY_LIGHT_BACKLOG = 32768;
 #endif // ENGINE_DEBUG_RENDER
@@ -119,6 +122,8 @@ constexpr unsigned int  DENSITY_SEED                = HUMIDITY_SEED + 1;
 constexpr unsigned int  DIRT_DEPTH_SEED             = DENSITY_SEED + 1;
 constexpr unsigned int  LAVA_DEPTH_SEED             = DIRT_DEPTH_SEED + 1;
 constexpr unsigned int  OBSIDIAN_DEPTH_SEED         = LAVA_DEPTH_SEED + 1;
+constexpr unsigned int  MOUNTAIN_REGION_SEED        = OBSIDIAN_DEPTH_SEED + 1;
+constexpr unsigned int  GLOWSTONE_SEED              = MOUNTAIN_REGION_SEED + 1;
 
 constexpr float         DEFAULT_OCTAVE_PERSISTENCE          = 0.5f;
 constexpr float         DEFAULT_NOISE_OCTAVE_SCALE          = 2.f;
@@ -128,8 +133,8 @@ constexpr float         RIVER_DEPTH                         = 8.f;
 constexpr float         TERRAIN_NOISE_SCALE         = 200.f;
 constexpr unsigned int  TERRAIN_NOISE_OCTAVES       = 5u;
 
-constexpr float         HUMIDITY_NOISE_SCALE        = 800.f;
-constexpr unsigned int  HUMIDITY_NOISE_OCTAVES      = 1u;
+constexpr float         HUMIDITY_NOISE_SCALE        = 400.f;
+constexpr unsigned int  HUMIDITY_NOISE_OCTAVES      = 4u;
 
 constexpr float         TEMPERATURE_RAW_NOISE_SCALE = 0.0075f;
 constexpr float         TEMPERATURE_NOISE_SCALE     = 400.f;
@@ -166,6 +171,7 @@ constexpr float         COAL_CHANCE                 = 0.05f;
 constexpr float         IRON_CHANCE                 = 0.02f;
 constexpr float         GOLD_CHANCE                 = 0.005f;
 constexpr float         DIAMOND_CHANCE              = 0.0001f;
+constexpr float         GLOWSTONE_SURFACE_CHANCE    = 0.004f;
 
 constexpr int           MIN_LAVA_BLOCKS             = 3;
 constexpr int           MAX_LAVA_BLOCKS             = 4;
@@ -175,7 +181,27 @@ constexpr int           MAX_OBSIDIAN_BLOCKS         = 4;
 
 constexpr float         DENSITY_NOISE_SCALE          = 64.f;
 constexpr float         DENSITY_NOISE_OCTAVES        = 4.f;
-constexpr float         DENSITY_BIAS_PER_BLOCK_DELTA = 0.012f;
+constexpr float         DENSITY_BIAS_PER_BLOCK_DELTA = 12.f / CHUNK_SIZE_Z;
+
+constexpr float         CONTINENTALNESS_HEIGHT_RANGE    = CHUNK_SIZE_Z / 8.f;
+constexpr float         PEAKS_AND_VALLEYS_HEIGHT_RANGE  = CHUNK_SIZE_Z * 0.27f;
+constexpr float         MAX_TERRAIN_HEIGHT              = CHUNK_SIZE_Z - (CHUNK_SIZE_Z / 20.f);
+constexpr float         WEIRDNESS_NOISE_STRETCH         = 2.f;
+
+constexpr float         MOUNTAIN_REGION_NOISE_SCALE     = 600.f;
+constexpr unsigned int  MOUNTAIN_REGION_NOISE_OCTAVES   = 3u;
+constexpr float         MOUNTAIN_REGION_START           = 0.15f;
+constexpr float         MOUNTAIN_REGION_FULL            = 0.35f;
+constexpr float         MOUNTAIN_REGION_EROSION_PULL    = 0.6f;
+
+constexpr int           MAX_SURFACE_DEPTH               = 10;
+
+constexpr float         COLD_MOUNTAIN_HEIGHT_MULTIPLIER = 1.4f;
+constexpr float         COLD_MOUNTAIN_START_TEMPERATURE = -0.1f;
+constexpr float         COLD_MOUNTAIN_FULL_TEMPERATURE  = -0.45f;
+
+constexpr float         ALTITUDE_TEMPERATURE_START_Z    = SEA_LEVEL_Z + (CHUNK_SIZE_Z / 4.f);
+constexpr float         ALTITUDE_TEMPERATURE_DROP       = 4.f / CHUNK_SIZE_Z;
 
 constexpr float         CONTINENTALNESS_NOISE_SCALE   = 512.f;
 constexpr float         CONTINENTALNESS_NOISE_OCTAVES = 4.f;
@@ -192,6 +218,7 @@ constexpr float         FOG_RANGE_NEAR = FOG_RANGE_FAR / 3.f;
 extern Vec2             g_fogRange;
 
 constexpr float         RAY_MAX_LENGTH = 8.f;
+constexpr int           MAX_PHYSICS_STEPS_PER_FRAME = 8;
 
 // Time of Day
 constexpr float GAME_SECONDS_PER_REAL_TIME_SECONDS      = 500.f;
@@ -367,6 +394,16 @@ enum Continentalness
 
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+struct TerrainColumn
+{
+    float   m_height            = 0.f;
+    float   m_continentalness   = 0.f;
+    float   m_erosion           = 0.f;
+    float   m_peaksAndValleys   = 0.f;
+    float   m_temperature       = 0.f;
+};
+
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 struct BiomeGenParams
 {
     float   m_continentalness;
@@ -379,7 +416,7 @@ struct BiomeGenParams
     int     m_dirtDepth;
     int     m_blockZ;
 
-    std::string m_blockBeforeReplacement;
+    unsigned char m_blockBeforeReplacement;
 };
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------

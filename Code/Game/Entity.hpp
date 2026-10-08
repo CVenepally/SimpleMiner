@@ -99,6 +99,8 @@ protected:
 	Vec3				m_pointsOnCollider_world[CP_COUNT] = {};
 	Vec3				m_currentAcceleration	=	Vec3();
 	Vec3				m_currentVelocity		=	Vec3();
+	Vec3				m_moveIntent			=	Vec3();
+	bool				m_wantsToJump			=	false;
 
 	float				m_horizontalGroundAcceleration	= 64.0f;
 	float				m_horizontalAirAcceleration		= 4.0f;

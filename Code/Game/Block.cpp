@@ -6,7 +6,7 @@
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block::Block()
 {
-    m_blockDefinitionIndex = BlockDefinition::GetBlockDefinitionIndex("Air");
+    m_blockDefinitionIndex = g_blockTypes.m_air;
 }
 
 //------------------------------------------------------------------------------------------------------------------
@@ -24,13 +24,13 @@ bool Block::IsBlockOpaque() const
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Block::IsBlockAir() const
 {
-    return m_blockDefinitionIndex == BlockDefinition::GetBlockDefinitionIndex("Air");
+    return m_blockDefinitionIndex == g_blockTypes.m_air;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Block::IsBlockWater() const
 {
-	return m_blockDefinitionIndex == BlockDefinition::GetBlockDefinitionIndex("Water");
+	return m_blockDefinitionIndex == g_blockTypes.m_water;
 }
 
 //------------------------------------------------------------------------------------------------------------------

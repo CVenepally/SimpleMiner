@@ -63,33 +63,28 @@ private:
     virtual ~Chunk();
     Chunk(Chunk const&) = delete;
 
-    explicit                    Chunk(IntVec2 const& chunkCoordinates);
+    explicit                    Chunk(IntVec2 const& chunkCoordinates, bool hasSaveFile);
                                 
     void                        Update();
     void                        Render();
 
     void                        InitializeBlocks();
 
-    void                        GenerateTerrain(std::vector<float>& densityMap, std::vector<float>& continentalnessMap, std::vector<float>& erosionMap, 
-                                                        std::vector<float>& peaksAndValleysMap, std::vector<float>& temperatureMap, 
-                                                        std::vector<float>& humidityMap, std::vector<int>& heightMap, std::vector<int>& dirtDepthMap, 
-                                                        std::vector<int>& lavaDepthMap, std::vector<int>& obsidianDepthMap);
-
     void                        GenerateTerrain_New(std::vector<float>& densityMap, std::vector<float>& continentalnessMap, std::vector<float>& erosionMap, 
                                                         std::vector<float>& peaksAndValleysMap, std::vector<float>& temperatureMap, 
                                                         std::vector<float>& humidityMap, std::vector<int>& heightMap, std::vector<int>& dirtDepthMap, 
                                                         std::vector<int>& lavaDepthMap, std::vector<int>& obsidianDepthMap);
+
+    TerrainColumn               ComputeTerrainColumn(float globalX, float globalY) const;
 
     void                        SurfaceBlockReplacement(std::vector<float>& densityMap, std::vector<float>& continentalnessMap, std::vector<float>& erosionMap,
                                                         std::vector<float>& peaksAndValleysMap, std::vector<float>& temperatureMap,
                                                         std::vector<float>& humidityMap, std::vector<int>& heightMap, std::vector<int>& dirtDepthMap, 
                                                         std::vector<int>& lavaDepthMap, std::vector<int>& obsidianDepthMap);
 
-    float                       ComputeTerrainHeightOffset(float blockGlobalX, float blockGlobalY, std::vector<float>& continentalnessMap, 
-                                                            std::vector<float>& erosionMap, std::vector<float>& peaksAndValleysMap, int colIndex);
-
     void                        BuildChunkMesh();
     Rgba8                       CalculateVertexLighting(Block* sideA, Block* sideB, Block* corner, Block* center, Rgba8 faceColor);
+    Rgba8                       CalculateFaceLighting(Block* neighbor, Rgba8 faceColor);
 
     int                         GetTerrainHeightForBlockColumn(int globalBlockColumnXCoord, int globalBlockColumnYCoord) const;
     int                         GetBlockIndex(IntVec3 const& localBlockCoords) const;
@@ -100,35 +95,35 @@ private:
     void                        RemoveNeighbors();
     void                        RemoveNeighbor(Chunk* chunk);
 
-    std::string                 GetBlockTypeForNonInlandBiomeBlock(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForDeepOceanBiomeBlock(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForOceanBiomeBlock(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForFrozenOceanBiomeBlock(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForNonInlandBiomeBlock(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForDeepOceanBiomeBlock(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForOceanBiomeBlock(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForFrozenOceanBiomeBlock(BiomeGenParams const& params);
 
 
-    std::string                 GetBlockTypeForInlandBiomeBlock(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForInlandBiomeBlock(BiomeGenParams const& params);
     
-    std::string                 GetBlockTypeForCoastBiomeBlock(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForNearInlandBiomeBlock(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForMidInlandBiomeBlock(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForFarInlandBiomeBlock(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForCoastBiomeBlock(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForNearInlandBiomeBlock(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForMidInlandBiomeBlock(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForFarInlandBiomeBlock(BiomeGenParams const& params);
 
-    std::string                 GetBlockTypeForBeachBiomes(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForSnowyBeach(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForNormalBeachBiome(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForDesertBiome(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForBeachBiomes(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForSnowyBeach(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForNormalBeachBiome(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForDesertBiome(BiomeGenParams const& params);
 
-    std::string                 GetBlockTypeForMiddleBiomes(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForSnowyPlains(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForSnowyTaiga(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForTaiga(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForPlains(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForForest(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForJungle(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForSavanna(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForBadlandBiomes(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForStoneyPeaks(BiomeGenParams const& params);
-    std::string                 GetBlockTypeForSnowyPeaks(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForMiddleBiomes(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForSnowyPlains(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForSnowyTaiga(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForTaiga(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForPlains(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForForest(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForJungle(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForSavanna(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForBadlandBiomes(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForStoneyPeaks(BiomeGenParams const& params);
+    unsigned char               GetBlockTypeForSnowyPeaks(BiomeGenParams const& params);
 
     InlandBiomeType             GetInlandBiomeTypeForContinentalness(float continentalness);
     PeaksAndValleysLevel        GetPeaksAndValleysLevel(float pvValue);

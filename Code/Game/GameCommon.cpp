@@ -29,13 +29,13 @@ float g_continentalnessNoiseOctaves = CONTINENTALNESS_NOISE_OCTAVES;
 //float g_midInlandStartTime = 0.45f;
 //float g_farInlandStartTime = 0.8f;
 
-LinearCurve1D   g_deepOceanCurve            = LinearCurve1D(-1.f, -1.f);
+LinearCurve1D   g_deepOceanCurve            = LinearCurve1D(-1.f, -0.7f);
 LinearCurve1D   g_oceanCurve                = LinearCurve1D(-0.6f, -0.4f);
-LinearCurve1D   g_coastCurve                = LinearCurve1D(-0.1f, -0.1f);
-LinearCurve1D   g_nearInlandCurve           = LinearCurve1D(0.2f, 0.2f);
-LinearCurve1D   g_midInlandCurve            = LinearCurve1D(0.4f, 0.4f);
-LinearCurve1D   g_farInlandCurve            = LinearCurve1D(0.8f, 0.7f);
-LinearCurve1D   g_maxContinentalnessCurve   = LinearCurve1D(1.f, 1.f);
+LinearCurve1D   g_coastCurve                = LinearCurve1D(-0.35f, -0.05f);
+LinearCurve1D   g_nearInlandCurve           = LinearCurve1D(-0.2f, 0.1f);
+LinearCurve1D   g_midInlandCurve            = LinearCurve1D(0.1f, 0.3f);
+LinearCurve1D   g_farInlandCurve            = LinearCurve1D(0.45f, 0.5f);
+LinearCurve1D   g_maxContinentalnessCurve   = LinearCurve1D(1.f, 0.7f);
 PieceWiseCurves g_continentalnessCurve      = PieceWiseCurves();
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -57,13 +57,13 @@ PieceWiseCurves g_continentalnessCurve      = PieceWiseCurves();
 // float g_erosionL6StartTime = 0.8f;
 
 
-LinearCurve1D g_erosionL0 = LinearCurve1D(-1.0f, -0.7f);   // very low erosion
-LinearCurve1D g_erosionL1 = LinearCurve1D(-0.7f, -0.3f);   // low erosion
-LinearCurve1D g_erosionL2 = LinearCurve1D(-0.3f, 0.0f);   // mild erosion
-LinearCurve1D g_erosionL3 = LinearCurve1D(0.0f, 0.35f);  // moderate erosion
-LinearCurve1D g_erosionL4 = LinearCurve1D(0.35f, 0.6f);   // strong erosion
-LinearCurve1D g_erosionL5 = LinearCurve1D(0.6f, 0.85f);  // very strong erosion
-LinearCurve1D g_erosionL6 = LinearCurve1D(0.85f, 1.0f);   // extreme erosion
+LinearCurve1D g_erosionL0 = LinearCurve1D(-1.0f, 1.0f);   // very low erosion
+LinearCurve1D g_erosionL1 = LinearCurve1D(-0.5f, 0.95f);   // low erosion
+LinearCurve1D g_erosionL2 = LinearCurve1D(-0.25f, 0.8f);   // mild erosion
+LinearCurve1D g_erosionL3 = LinearCurve1D(0.0f, 0.6f);  // moderate erosion
+LinearCurve1D g_erosionL4 = LinearCurve1D(0.25f, 0.35f);   // strong erosion
+LinearCurve1D g_erosionL5 = LinearCurve1D(0.5f, 0.15f);  // very strong erosion
+LinearCurve1D g_erosionL6 = LinearCurve1D(0.75f, 0.05f);   // extreme erosion
 PieceWiseCurves  g_erosionCurve = PieceWiseCurves();
 
 float g_erosionNoiseScale   = 256.f;
@@ -71,11 +71,11 @@ float g_erosionNoiseOctaves = 4.f;
 float g_erosionDefaultTerrainHeight = DEFAULT_TERRAIN_HEIGHT / 4.f;
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-LinearCurve1D g_weirdnessValleys    = LinearCurve1D(-1.f, -1.f);
-LinearCurve1D g_weirdnessLow        = LinearCurve1D(-0.6f, -0.4f);
-LinearCurve1D g_weirdnessMid        = LinearCurve1D(0.f, 0.f);
-LinearCurve1D g_weirdnessHigh       = LinearCurve1D(0.4f, 0.3f);
-LinearCurve1D g_weirdnessPeaks      = LinearCurve1D(0.7f, 0.65f);
+LinearCurve1D g_weirdnessValleys    = LinearCurve1D(-1.f, -0.15f);
+LinearCurve1D g_weirdnessLow        = LinearCurve1D(-0.6f, 0.f);
+LinearCurve1D g_weirdnessMid        = LinearCurve1D(-0.2f, 0.15f);
+LinearCurve1D g_weirdnessHigh       = LinearCurve1D(0.2f, 0.45f);
+LinearCurve1D g_weirdnessPeaks      = LinearCurve1D(0.6f, 0.85f);
 LinearCurve1D g_weirdnessMax        = LinearCurve1D(1.f, 1.f);
 
 PieceWiseCurves  g_weirdnessCurve = PieceWiseCurves();
@@ -98,24 +98,25 @@ bool g_computePeaksAndValley                = true;
 bool g_lockTerrainGenerationToOrigin        = false;
 bool g_enableSurfaceBlockReplacement        = true;
 bool g_enableLighting                       = true;
+bool g_enableSmoothLighting                 = true;
 bool g_enableDiggingAndPlacing              = true;
 bool g_enableCrossChunkHiddenSurfaceRemoval = true;
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-FloatRange g_t0Range = FloatRange(-1.f, -0.45f);
-FloatRange g_t1Range = FloatRange(-0.45f, -0.15f);
-FloatRange g_t2Range = FloatRange(-0.15f, 0.2f);
-FloatRange g_t3Range = FloatRange(0.2f, 0.55f);
-FloatRange g_t4Range = FloatRange(0.55f, 1.f);
+FloatRange g_t0Range = FloatRange(-1.f, -0.3f);
+FloatRange g_t1Range = FloatRange(-0.3f, -0.1f);
+FloatRange g_t2Range = FloatRange(-0.1f, 0.1f);
+FloatRange g_t3Range = FloatRange(0.1f, 0.3f);
+FloatRange g_t4Range = FloatRange(0.3f, 1.f);
 
-FloatRange g_h0Range = FloatRange(-1.f, -0.35f);
-FloatRange g_h1Range = FloatRange(-0.35f, -0.1f);
+FloatRange g_h0Range = FloatRange(-1.f, -0.3f);
+FloatRange g_h1Range = FloatRange(-0.3f, -0.1f);
 FloatRange g_h2Range = FloatRange(-0.1f, 0.1f);
 FloatRange g_h3Range = FloatRange(0.1f, 0.3f);
 FloatRange g_h4Range = FloatRange(0.3f, 1.f);
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-float g_nonInlandBiomeMaxContinentalness = g_oceanCurve.m_end;
+float g_nonInlandBiomeMaxContinentalness = g_coastCurve.m_start;
 
 //------------------------------------------------------------------------------------------------------------------
 uint32_t LocalCoordsToIndex(IntVec3 const& localCoords)

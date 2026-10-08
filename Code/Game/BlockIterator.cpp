@@ -276,9 +276,7 @@ Block* BlockIterator::GetNegZBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetPosXPosYBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::FORWARD + IntVec3::LEFT;
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(1, 1, 0);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -289,9 +287,7 @@ Block* BlockIterator::GetPosXPosYBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetPosXNegYBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::FORWARD + IntVec3::RIGHT;
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(1, -1, 0);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -302,9 +298,7 @@ Block* BlockIterator::GetPosXNegYBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetNegXPosYBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::BACKWARD + IntVec3::LEFT;
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(-1, 1, 0);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -315,22 +309,18 @@ Block* BlockIterator::GetNegXPosYBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetNegXNegYBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::BACKWARD + IntVec3::RIGHT;
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(-1, -1, 0);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
 	}
 	return nullptr;
 }
+
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetPosZPosXBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::UP + IntVec3::FORWARD;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(1, 0, 1);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -341,10 +331,7 @@ Block* BlockIterator::GetPosZPosXBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetNegZPosXBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::DOWN + IntVec3::BACKWARD;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(1, 0, -1);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -355,10 +342,7 @@ Block* BlockIterator::GetNegZPosXBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetNegZNegXBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::DOWN + IntVec3::BACKWARD;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(-1, 0, -1);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -369,10 +353,7 @@ Block* BlockIterator::GetNegZNegXBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetPosZNegXBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::UP + IntVec3::BACKWARD;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(-1, 0, 1);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -383,10 +364,7 @@ Block* BlockIterator::GetPosZNegXBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetPosYPosZBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::LEFT + IntVec3::UP;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(0, 1, 1);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -397,10 +375,7 @@ Block* BlockIterator::GetPosYPosZBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetPosYNegZBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::LEFT + IntVec3::DOWN;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(0, 1, -1);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -411,10 +386,7 @@ Block* BlockIterator::GetPosYNegZBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetNegYPosZBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::RIGHT + IntVec3::UP;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(0, -1, 1);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -425,10 +397,7 @@ Block* BlockIterator::GetNegYPosZBlock()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Block* BlockIterator::GetNegYNegZBlock()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::RIGHT + IntVec3::DOWN;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
+	BlockIterator neighborIter = GetOffsetBlockIterator(0, -1, -1);
 	if(IsValidIterator(neighborIter))
 	{
 		return &neighborIter.GetBlockRef();
@@ -580,61 +549,72 @@ BlockIterator BlockIterator::GetNegZBlockIterator()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 BlockIterator BlockIterator::GetPosXPosYBlockIterator()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::FORWARD + IntVec3::LEFT;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
-	if(IsValidIterator(neighborIter))
-	{
-		return neighborIter;
-	}
-
-	return BlockIterator(nullptr, 0);
+	return GetOffsetBlockIterator(1, 1, 0);
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 BlockIterator BlockIterator::GetPosXNegYBlockIterator()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::FORWARD + IntVec3::RIGHT;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
-	if(IsValidIterator(neighborIter))
-	{
-		return neighborIter;
-	}
-
-	return BlockIterator(nullptr, 0);
+	return GetOffsetBlockIterator(1, -1, 0);
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 BlockIterator BlockIterator::GetNegXPosYBlockIterator()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::BACKWARD + IntVec3::LEFT;
-
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
-	if(IsValidIterator(neighborIter))
-	{
-		return neighborIter;
-	}
-
-	return BlockIterator(nullptr, 0);
+	return GetOffsetBlockIterator(-1, 1, 0);
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 BlockIterator BlockIterator::GetNegXNegYBlockIterator()
 {
-	IntVec3 globalCoord = GetGlobalCoords(m_chunk->GetChunkCoordinates(), m_blockIndex);
-	IntVec3 neighborCoord = globalCoord + IntVec3::BACKWARD + IntVec3::RIGHT;
+	return GetOffsetBlockIterator(-1, -1, 0);
+}
 
-	BlockIterator neighborIter = GetBlockIteratorForBlockGlobalCoord(neighborCoord);
-	if(IsValidIterator(neighborIter))
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+BlockIterator BlockIterator::GetOffsetBlockIterator(int offsetX, int offsetY, int offsetZ)
+{
+	IntVec3 localCoord = IndexToLocalCoords(m_blockIndex) + IntVec3(offsetX, offsetY, offsetZ);
+
+	if(localCoord.z < 0 || localCoord.z > CHUNK_MAX_Z)
 	{
-		return neighborIter;
+		return BlockIterator(nullptr, 0);
 	}
 
-	return BlockIterator(nullptr, 0);
+	Chunk* chunk = m_chunk;
+
+	if(localCoord.x < 0)
+	{
+		chunk = chunk->GetNeighborChunk(NEIGHBOUR_NEG_X);
+		localCoord.x += CHUNK_SIZE_X;
+	}
+	else if(localCoord.x > CHUNK_MAX_X)
+	{
+		chunk = chunk->GetNeighborChunk(NEIGHBOUR_POS_X);
+		localCoord.x -= CHUNK_SIZE_X;
+	}
+
+	if(!chunk)
+	{
+		return BlockIterator(nullptr, 0);
+	}
+
+	if(localCoord.y < 0)
+	{
+		chunk = chunk->GetNeighborChunk(NEIGHBOUR_NEG_Y);
+		localCoord.y += CHUNK_SIZE_Y;
+	}
+	else if(localCoord.y > CHUNK_MAX_Y)
+	{
+		chunk = chunk->GetNeighborChunk(NEIGHBOUR_POS_Y);
+		localCoord.y -= CHUNK_SIZE_Y;
+	}
+
+	if(!chunk)
+	{
+		return BlockIterator(nullptr, 0);
+	}
+
+	return BlockIterator(chunk, LocalCoordsToIndex(localCoord));
 }
 
 

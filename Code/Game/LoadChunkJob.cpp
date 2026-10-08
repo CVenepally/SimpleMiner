@@ -13,9 +13,9 @@ LoadChunkJob::~LoadChunkJob()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void LoadChunkJob::Execute()
 {
-	DebuggerPrintf("[Load Chunk Job] Working...\n");
 	m_chunkToLoad->m_chunkState = ChunkState::LOADING;
-	m_chunkToLoad->TryLoadFromFile();
-	m_chunkToLoad->m_chunkState = ChunkState::LOADED;
-	DebuggerPrintf("[Load Chunk Job] Work Finished!\n");
+	if(!m_chunkToLoad->TryLoadFromFile())
+	{
+		m_chunkToLoad->InitializeBlocks();
+	}
 }

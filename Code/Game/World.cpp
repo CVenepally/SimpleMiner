@@ -1,4 +1,4 @@
-﻿#include "Game/World.hpp"
+#include "Game/World.hpp"
 #include "Game/Game.hpp"
 #include "Game/Chunk.hpp"
 #include "Game/Block.hpp"
@@ -18,6 +18,8 @@
 #include "ThirdParty/Noise/SmoothNoise.hpp"
 
 #include <unordered_set>
+#include <algorithm>
+#include <filesystem>
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 double g_cancelJobsTime				= 0.;
@@ -79,6 +81,33 @@ World::World(Clock* gameClock)
 
 	m_physicsTimer = Timer(physicsTimeStep, &Clock::GetSystemClock());
 	m_physicsTimer.Start();
+
+	for(int y = -CHUNK_ACTIVATION_RADIUS_Y; y <= CHUNK_ACTIVATION_RADIUS_Y; ++y)
+	{
+		for(int x = -CHUNK_ACTIVATION_RADIUS_X; x <= CHUNK_ACTIVATION_RADIUS_X; ++x)
+		{
+			IntVec2 offset = IntVec2(x, y);
+			if(IsChunkWithinActivationRange(offset, IntVec2::ZERO))
+			{
+				m_activationOffsets.push_back(offset);
+			}
+		}
+	}
+
+	std::sort(m_activationOffsets.begin(), m_activationOffsets.end(), [](IntVec2 const& a, IntVec2 const& b)
+	{
+		return a.GetLengthSquared() < b.GetLengthSquared();
+	});
+
+	std::error_code errorCode;
+	for(std::filesystem::directory_entry const& entry : std::filesystem::directory_iterator("Saves", errorCode))
+	{
+		IntVec2 chunkCoords;
+		if(sscanf_s(entry.path().filename().string().c_str(), "Chunk(%d,%d).chunk", &chunkCoords.x, &chunkCoords.y) == 2)
+		{
+			m_savedChunkCoords.insert(chunkCoords);
+		}
+	}
 }
 
 //------------------------------------------------------------------------------------------------------------------
@@ -136,9 +165,17 @@ void World::Update()
 
 	UpdateEntities();
 
-	if(m_physicsTimer.DecrementPeriodIfElapsed())
+	int physicsSteps = 0;
+	while(m_physicsTimer.DecrementPeriodIfElapsed())
 	{
 		PhysicsUpdate();
+		physicsSteps += 1;
+
+		if(physicsSteps >= MAX_PHYSICS_STEPS_PER_FRAME)
+		{
+			m_physicsTimer.Restart();
+			break;
+		}
 	}
 
 	if(g_inputSystem->IsKeyDown('Y'))
@@ -382,10 +419,29 @@ void World::MarkChunkDirty(Chunk* chunk)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void World::MarkAllActiveChunksDirty()
+{
+	std::vector<Chunk*> activeChunks;
+
+	{
+		std::scoped_lock<std::mutex> lock(m_activeChunksMutex);
+		activeChunks.reserve(m_activeChunks.size());
+
+		for(auto iter = m_activeChunks.begin(); iter != m_activeChunks.end(); ++iter)
+		{
+			activeChunks.push_back(iter->second);
+		}
+	}
+
+	for(Chunk* chunk : activeChunks)
+	{
+		MarkChunkDirty(chunk);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool World::GenerateClosestChunkMesh()
 {
-	DebuggerPrintf("[Mesh Build] Building Mesh\n");
-
 	IntVec3 playerPos = Game::GetPlayerPosition().GetAsIntVec3();
 	IntVec2 playerChunkCoords = GetChunkCoords(playerPos);
 
@@ -409,20 +465,20 @@ bool World::GenerateClosestChunkMesh()
 				}
 			}
 		}
-	}
 
-	if(closestChunk)
-	{
-
+		if(closestChunk)
 		{
-			std::scoped_lock<std::mutex> lock(m_pendingMeshBuildingMutex);
-			closestChunk->BuildChunkMesh();
 			m_pendingMeshBuilding.erase(closestChunk->m_chunkCoords);
 		}
-		return true;
 	}
 
-	return false;
+	if(!closestChunk)
+	{
+		return false;
+	}
+
+	closestChunk->BuildChunkMesh();
+	return true;
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -519,6 +575,28 @@ void World::FindNeighboursForChunk(Chunk* chunk)
 			MarkChunkDirty(neighbour);
 		}
 	}
+
+	IntVec2 diagonalCoords[4] = {
+		IntVec2(chunk->m_chunkCoords.x + 1, chunk->m_chunkCoords.y + 1),
+		IntVec2(chunk->m_chunkCoords.x + 1, chunk->m_chunkCoords.y - 1),
+		IntVec2(chunk->m_chunkCoords.x - 1, chunk->m_chunkCoords.y + 1),
+		IntVec2(chunk->m_chunkCoords.x - 1, chunk->m_chunkCoords.y - 1)
+	};
+
+	for(int i = 0; i < 4; ++i)
+	{
+		Chunk* diagonal = nullptr;
+		{
+			std::scoped_lock<std::mutex> lock(m_activeChunksMutex);
+			auto iter = m_activeChunks.find(diagonalCoords[i]);
+			if(iter != m_activeChunks.end())
+			{
+				diagonal = iter->second;
+			}
+		}
+
+		MarkChunkDirty(diagonal);
+	}
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -547,7 +625,9 @@ void World::GenerateChunks_Job()
 		chunksToBuild = MAX_ACTIVE_CHUNKS - (activeChunksSize + pendingActivationSize);
 	}
 
-	if(chunksToBuild == 0)
+	chunksToBuild = GetMin(chunksToBuild, MAX_CHUNKS_TO_CREATE);
+
+	if(chunksToBuild <= 0)
 	{
 		return;
 	}
@@ -555,95 +635,78 @@ void World::GenerateChunks_Job()
 	IntVec3 playerPos = Game::GetPlayerPosition().GetAsIntVec3();
 	IntVec2 playerChunkCoords = GetChunkCoords(playerPos);
 
-	int step = 0;
+	std::vector<IntVec2> coordsToCreate;
+	coordsToCreate.reserve(chunksToBuild);
 
-	while(step < CHUNK_ACTIVATION_RADIUS_X && chunksToBuild > 0)
 	{
-		for(int x = 0; x < step; x++)
+		std::scoped_lock<std::mutex> lock1(m_activeChunksMutex);
+		std::scoped_lock<std::mutex> lock2(m_pendingActivationMutex);
+		std::scoped_lock<std::mutex> lock3(m_pendingDeactivationMutex);
+
+		for(IntVec2 const& offset : m_activationOffsets)
 		{
-			int chunkCoordForwardX = playerChunkCoords.x + x;
-			int chunkCoordBackwardX = playerChunkCoords.x - x;
+			IntVec2 coord = playerChunkCoords + offset;
 
-			for(int y = 0; y < step; y++)
+			if(m_activeChunks.find(coord) == m_activeChunks.end() &&
+			   m_pendingActivation.find(coord) == m_pendingActivation.end() &&
+			   m_pendingDeactivation.find(coord) == m_pendingDeactivation.end())
 			{
-				int     chunkCoordLeftY = playerChunkCoords.y + y;
-				int     chunkCoordRightY = playerChunkCoords.y - y;
-				IntVec2 chunkCoordA = IntVec2(chunkCoordForwardX, chunkCoordLeftY);
-				IntVec2 chunkCoordB = IntVec2(chunkCoordForwardX, chunkCoordRightY);
-				IntVec2 chunkCoordC = IntVec2(chunkCoordBackwardX, chunkCoordLeftY);
-				IntVec2 chunkCoordD = IntVec2(chunkCoordBackwardX, chunkCoordRightY);
+				coordsToCreate.push_back(coord);
 
-				IntVec2 chunks[4] = {chunkCoordA, chunkCoordB, chunkCoordC, chunkCoordD};
-
-				for(auto const& coord : chunks)
+				if(static_cast<int>(coordsToCreate.size()) >= chunksToBuild)
 				{
-					bool shouldCreateChunk = false;
-
-					{
-						std::scoped_lock<std::mutex> lock1(m_activeChunksMutex);
-						std::scoped_lock<std::mutex> lock2(m_pendingActivationMutex);
-
-						shouldCreateChunk = m_activeChunks.find(coord) == m_activeChunks.end() &&
-							m_pendingActivation.find(coord) == m_pendingActivation.end() &&
-							IsChunkWithinActivationRange(coord, playerChunkCoords);
-// 						shouldCreateChunk = m_activeChunks.find(coord) == m_activeChunks.end() && IsChunkWithinActivationRange(coord, playerChunkCoords);
-					}
-
-					if(shouldCreateChunk)
-					{
-						Chunk* newChunk = new Chunk(coord);
-						chunksToBuild -= 1;
-
-						{
-							std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
-							m_pendingActivation[coord] = newChunk;
-						}
-
-						if(newChunk->m_chunkState == ChunkState::PENDING_GENERATE)
-						{
-							Job* newJob = new GenerateChunkJob(newChunk);
-
-							{
-								std::scoped_lock<std::mutex> lock(m_jobQueuesMutex);
-								if(m_numGenerateJobsInJobSystem < MAX_GENERATE_JOBS)
-								{
-									g_jobSystem->AddJob(newJob);
-									m_queuedActivateJobsInJobSystemQueue.push_back(newJob);
-									m_numGenerateJobsInJobSystem += 1;
-								}
-								else
-								{
-									m_generateJobsQueue.push_back(newJob);
-								}
-							}
-
-							DebuggerPrintf("Added Generate Job\n");
-						}
-						else if(newChunk->m_chunkState == ChunkState::PENDING_LOAD)
-						{
-							Job* newJob = new LoadChunkJob(newChunk);
-
-							{
-								std::scoped_lock<std::mutex> lock(m_jobQueuesMutex);
-								if(m_numLoadJobsInJobSystem < MAX_LOAD_JOBS)
-								{
-									g_jobSystem->AddJob(newJob);
-									m_queuedActivateJobsInJobSystemQueue.push_back(newJob);
-									m_numLoadJobsInJobSystem += 1;
-								}
-								else
-								{
-									m_loadJobsQueue.push_back(newJob);
-								}
-							}
-
-							DebuggerPrintf("Added Load Job\n");
-						}
-					}
+					break;
 				}
 			}
 		}
-		step += 1;
+	}
+
+	for(IntVec2 const& coord : coordsToCreate)
+	{
+		bool hasSaveFile = m_savedChunkCoords.find(coord) != m_savedChunkCoords.end();
+		Chunk* newChunk = new Chunk(coord, hasSaveFile);
+
+		{
+			std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
+			m_pendingActivation[coord] = newChunk;
+		}
+
+		if(newChunk->m_chunkState == ChunkState::PENDING_GENERATE)
+		{
+			Job* newJob = new GenerateChunkJob(newChunk);
+
+			{
+				std::scoped_lock<std::mutex> lock(m_jobQueuesMutex);
+				if(m_numGenerateJobsInJobSystem < MAX_GENERATE_JOBS)
+				{
+					g_jobSystem->AddJob(newJob);
+					m_queuedActivateJobsInJobSystemQueue.push_back(newJob);
+					m_numGenerateJobsInJobSystem += 1;
+				}
+				else
+				{
+					m_generateJobsQueue.push_back(newJob);
+				}
+			}
+		}
+		else if(newChunk->m_chunkState == ChunkState::PENDING_LOAD)
+		{
+			Job* newJob = new LoadChunkJob(newChunk);
+
+			{
+				std::scoped_lock<std::mutex> lock(m_jobQueuesMutex);
+				if(m_numLoadJobsInJobSystem < MAX_LOAD_JOBS)
+				{
+					g_jobSystem->AddJob(newJob);
+					m_queuedActivateJobsInJobSystemQueue.push_back(newJob);
+					m_numLoadJobsInJobSystem += 1;
+				}
+				else
+				{
+					m_loadJobsQueue.push_back(newJob);
+				}
+			}
+		}
 	}
 
 	g_generateChunkJobsTime = (GetCurrentTimeSeconds() - startTime) * 1000.;
@@ -808,10 +871,14 @@ void World::PushPendingJobs()
 
 		if(!IsChunkWithinActivationRange(generateJob->m_chunkToGenerate->m_chunkCoords, playerChunkCoords))
 		{
-// 			{
-// 				std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
-// 				m_pendingActivation.erase(generateJob->m_chunkToGenerate->m_chunkCoords);
-// 			}
+			{
+				std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
+				auto pendingIter = m_pendingActivation.find(generateJob->m_chunkToGenerate->m_chunkCoords);
+				if(pendingIter != m_pendingActivation.end() && pendingIter->second == generateJob->m_chunkToGenerate)
+				{
+					m_pendingActivation.erase(pendingIter);
+				}
+			}
 			delete generateJob->m_chunkToGenerate;
 			delete generateJob;
 			continue;
@@ -852,10 +919,14 @@ void World::PushPendingJobs()
 
 		if(!IsChunkWithinActivationRange(loadJob->m_chunkToLoad->m_chunkCoords, playerChunkCoords))
 		{
-// 			{
-// 				std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
-// 				m_pendingActivation.erase(loadJob->m_chunkToLoad->m_chunkCoords);
-// 			}
+			{
+				std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
+				auto pendingIter = m_pendingActivation.find(loadJob->m_chunkToLoad->m_chunkCoords);
+				if(pendingIter != m_pendingActivation.end() && pendingIter->second == loadJob->m_chunkToLoad)
+				{
+					m_pendingActivation.erase(pendingIter);
+				}
+			}
 			delete loadJob->m_chunkToLoad;
 			delete loadJob;
 			continue;
@@ -1006,6 +1077,7 @@ void World::GetCompletedJobs()
 		if(genJob)
 		{
 			Chunk* chunk = genJob->m_chunkToGenerate;
+			chunk->m_chunkState = ChunkState::GENERATED;
 // 			ActivateChunk(chunk);
 
 			{
@@ -1025,6 +1097,7 @@ void World::GetCompletedJobs()
 		if(loadJob)
 		{
 			Chunk* chunk = loadJob->m_chunkToLoad;
+			chunk->m_chunkState = ChunkState::LOADED;
 // 			ActivateChunk(chunk);
 			{
 				std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
@@ -1044,6 +1117,8 @@ void World::GetCompletedJobs()
 		if(saveJob)
 		{
 			Chunk* chunk = saveJob->m_chunkToSave;
+
+			m_savedChunkCoords.insert(chunk->m_chunkCoords);
 
 			{
 				std::scoped_lock<std::mutex> lock(m_pendingDeactivationMutex);
@@ -1103,6 +1178,33 @@ void World::ActivateChunk()
 	double startTime = GetCurrentTimeSeconds();
 
 	IntVec2 playerPos = Game::GetPlayerPosition().GetAsIntVec3().GetXY2D();
+	IntVec2 playerChunkCoords = GetChunkCoords(Game::GetPlayerPosition().GetAsIntVec3());
+
+	std::vector<Chunk*> staleChunks;
+	{
+		std::scoped_lock<std::mutex> lock(m_pendingActivationMutex);
+
+		for(auto iter = m_pendingActivation.begin(); iter != m_pendingActivation.end();)
+		{
+			Chunk* chunk = iter->second;
+
+			if(chunk && (chunk->m_chunkState == ChunkState::GENERATED || chunk->m_chunkState == ChunkState::LOADED) &&
+			   !IsChunkWithinActivationRange(iter->first, playerChunkCoords))
+			{
+				staleChunks.push_back(chunk);
+				iter = m_pendingActivation.erase(iter);
+			}
+			else
+			{
+				++iter;
+			}
+		}
+	}
+
+	for(Chunk* chunk : staleChunks)
+	{
+		delete chunk;
+	}
 
 	int chunksActivated = 0;
 
@@ -1488,6 +1590,17 @@ void World::MarkNeighborBlockLightDirty(BlockIterator& blockIter)
 	{
 		posYChunk = blockIter.GetPosYChunk();
 		MarkChunkDirty(posYChunk);
+	}
+
+	Chunk* xChunk = posXChunk ? posXChunk : negXChunk;
+	Chunk* yChunk = posYChunk ? posYChunk : negYChunk;
+	if(xChunk && (localCoords.y == 0 || localCoords.y == CHUNK_MAX_Y))
+	{
+		MarkChunkDirty(xChunk->GetNeighborChunk(localCoords.y == 0 ? NEIGHBOUR_NEG_Y : NEIGHBOUR_POS_Y));
+	}
+	else if(yChunk && (localCoords.x == 0 || localCoords.x == CHUNK_MAX_X))
+	{
+		MarkChunkDirty(yChunk->GetNeighborChunk(localCoords.x == 0 ? NEIGHBOUR_NEG_X : NEIGHBOUR_POS_X));
 	}
 
 	Block* posXBlock = blockIter.GetPosXBlock();

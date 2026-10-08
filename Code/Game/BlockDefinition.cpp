@@ -9,6 +9,7 @@
 
 //------------------------------------------------------------------------------------------------------------------
 std::vector<BlockDefinition*> BlockDefinition::s_blockDefinitions;
+BlockTypeIndices g_blockTypes;
 extern SpriteSheet* g_blockSpriteSheet;
 extern SpriteSheet* g_itemSpriteSheet;
 
@@ -80,6 +81,33 @@ void BlockDefinition::InitBlockDefinitions()
         
         blockDefElement = blockDefElement->NextSiblingElement();
     }
+
+    InitBlockTypeIndices();
+}
+
+//------------------------------------------------------------------------------------------------------------------
+void BlockDefinition::InitBlockTypeIndices()
+{
+    g_blockTypes.m_air              = GetBlockDefinitionIndex("Air");
+    g_blockTypes.m_water            = GetBlockDefinitionIndex("Water");
+    g_blockTypes.m_sand             = GetBlockDefinitionIndex("Sand");
+    g_blockTypes.m_snow             = GetBlockDefinitionIndex("Snow");
+    g_blockTypes.m_ice              = GetBlockDefinitionIndex("Ice");
+    g_blockTypes.m_dirt             = GetBlockDefinitionIndex("Dirt");
+    g_blockTypes.m_stone            = GetBlockDefinitionIndex("Stone");
+    g_blockTypes.m_coal             = GetBlockDefinitionIndex("Coal");
+    g_blockTypes.m_iron             = GetBlockDefinitionIndex("Iron");
+    g_blockTypes.m_gold             = GetBlockDefinitionIndex("Gold");
+    g_blockTypes.m_diamond          = GetBlockDefinitionIndex("Diamond");
+    g_blockTypes.m_obsidian         = GetBlockDefinitionIndex("Obsidian");
+    g_blockTypes.m_lava             = GetBlockDefinitionIndex("Lava");
+    g_blockTypes.m_glowstone        = GetBlockDefinitionIndex("Glowstone");
+    g_blockTypes.m_cobblestone      = GetBlockDefinitionIndex("Cobblestone");
+    g_blockTypes.m_chiseledBrick    = GetBlockDefinitionIndex("ChiseledBrick");
+    g_blockTypes.m_grass            = GetBlockDefinitionIndex("Grass");
+    g_blockTypes.m_grassLight       = GetBlockDefinitionIndex("GrassLight");
+    g_blockTypes.m_grassDark        = GetBlockDefinitionIndex("GrassDark");
+    g_blockTypes.m_grassYellow      = GetBlockDefinitionIndex("GrassYellow");
 }
 
 //------------------------------------------------------------------------------------------------------------------
@@ -87,8 +115,7 @@ unsigned char BlockDefinition::GetBlockDefinitionIndex(std::string const& blockT
 {
     for(size_t index = 0; index < s_blockDefinitions.size(); ++index)
     {
-        std::string type = s_blockDefinitions[index]->m_blockName;
-        if (type == blockType)
+        if (s_blockDefinitions[index]->m_blockName == blockType)
         {
             return static_cast<unsigned char>(index);
         }

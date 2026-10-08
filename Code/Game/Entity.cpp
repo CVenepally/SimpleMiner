@@ -55,6 +55,15 @@ void Entity::Update()
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Entity::PhysicsUpdate(float deltaSeconds)
 {
+	float moveAcceleration = m_isGrounded ? m_horizontalGroundAcceleration : m_horizontalAirAcceleration;
+	AddForce(m_moveIntent * moveAcceleration);
+
+	if(m_wantsToJump && m_isGrounded)
+	{
+		AddImpulse(Vec3::UP * m_jumpImpulse);
+	}
+	m_wantsToJump = false;
+
 	Vec3 horizontal = Vec3(m_currentVelocity.x, m_currentVelocity.y, 0.f);
 
 	float dragCoefficient = m_isGrounded ? m_horizontalGroundDragCoefficient : m_horizontalAirDragCoefficient;
@@ -474,13 +483,11 @@ Mat44 Entity::GetTransfrom() const
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Entity::MoveInDirection(Vec3 const& moveDirection, bool didJump)
 {
-	float acceleration = m_isGrounded ? m_horizontalGroundAcceleration : m_horizontalAirAcceleration;
-	
-	AddForce(moveDirection * acceleration);
+	m_moveIntent = moveDirection;
 
-	if(didJump && m_isGrounded)
+	if(didJump)
 	{
-		AddImpulse(Vec3::UP * m_jumpImpulse);
+		m_wantsToJump = true;
 	}
 }
 

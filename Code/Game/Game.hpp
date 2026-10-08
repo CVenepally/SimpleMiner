@@ -69,6 +69,7 @@ public:
 	static bool		ShouldDisplayJobInfo();
 	static Vec3     GetPlayerPosition();
 	static bool     ShowEntityDebugs();
+	static bool		IsHUDHidden();
 	static bool		Event_AddGlowstone(EventArgs& args);
 
 //	static bool		s_lockGenerationToOrigin;
@@ -93,6 +94,7 @@ private:
 	static Clock*		s_gameClock;
 	static bool			s_isDebugMode;
 	static bool			s_jobInfo;
-	static bool			s_displayEntityDebug;								
+	static bool			s_displayEntityDebug;
+	static bool			s_isHUDHidden;
 
 };

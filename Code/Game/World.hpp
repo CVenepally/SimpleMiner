@@ -6,6 +6,7 @@
 #include "Engine/Core/Timer.hpp"
 
 #include <map>
+#include <set>
 #include <deque>
 #include <vector>
 #include <mutex>
@@ -49,6 +50,7 @@ public:
 	std::string GetWorldDebugInfo() const;
 
 	void MarkChunkDirty(Chunk* chunk);
+	void MarkAllActiveChunksDirty();
 	void MarkLightingDirty(BlockIterator const& blockIter);
 	void MarkLightingDirtyIfNotOpaque(BlockIterator const& blockIter);
 
@@ -108,6 +110,9 @@ private:
 	JobQueue			m_loadJobsQueue;
 	JobQueue			m_saveJobsQueue;
 	std::vector<Job*>	m_queuedActivateJobsInJobSystemQueue;
+
+	std::vector<IntVec2> m_activationOffsets;
+	std::set<IntVec2>	m_savedChunkCoords;
 
 	Clock*				m_worldClock = nullptr;
 

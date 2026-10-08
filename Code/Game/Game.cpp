@@ -32,6 +32,7 @@ bool			Game::s_isDebugMode				= false;
 //bool			Game::s_lockGenerationToOrigin	= false;
 bool			Game::s_jobInfo					= false;
 bool			Game::s_displayEntityDebug		= false;
+bool			Game::s_isHUDHidden				= false;
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Game::Game()
@@ -191,6 +192,11 @@ void Game::DebugImguiInfo()
 	if(ImGui::CollapsingHeader("Rendering"))
 	{
 		ImGui::Checkbox("Enable lighting", &g_enableLighting);
+
+		if(ImGui::Checkbox("Enable smooth lighting", &g_enableSmoothLighting))
+		{
+			s_world->MarkAllActiveChunksDirty();
+		}
 	}
 	if(ImGui::CollapsingHeader("Density Noise"))
 	{
@@ -588,7 +594,10 @@ void Game::Render()
 		RenderGame();
 	}
 
-	DebugRenderWorld(s_gameCamera->m_camera);
+	if(!s_isHUDHidden)
+	{
+		DebugRenderWorld(s_gameCamera->m_camera);
+	}
 
 	g_theRenderer->EndCamera(s_gameCamera->m_camera);
 	
@@ -600,7 +609,7 @@ void Game::Render()
 		RenderAttractMode();
 	}
 	
-	if(!m_isAttractMode)
+	if(!m_isAttractMode && !s_isHUDHidden)
 	{
 		if(m_playerEntity)
 		{
@@ -749,6 +758,9 @@ void Game::PrintControlsOnDevConsole()
 	g_devConsole->AddLine(DevConsole::INFO_MAJOR, "Move Up and Down - E/Q");
 	g_devConsole->AddLine(DevConsole::INFO_MAJOR, "Increase Move Speed - Left Shift");
 	g_devConsole->AddLine(DevConsole::INFO_MAJOR, "Toggle ImGUI Menu - F1");
+	g_devConsole->AddLine(DevConsole::INFO_MAJOR, "Toggle HUD and Screen Text - H");
+	g_devConsole->AddLine(DevConsole::INFO_MAJOR, "Toggle Flythrough (Auto Forward) - F");
+	g_devConsole->AddLine(DevConsole::INFO_MAJOR, "Toggle Smooth / Flat Lighting - L");
 	g_devConsole->AddLine(DevConsole::INFO_MAJOR, "Toggle Debug Draw - F2");
 	g_devConsole->AddLine(DevConsole::INFO_MAJOR, "Toggle Job System Info - F3");
 	g_devConsole->AddLine(DevConsole::INFO_MAJOR, "Toggle Entity Debug Render - F4");
@@ -800,6 +812,17 @@ void Game::KeyboardControls()
 		if(g_inputSystem->WasKeyJustPressed(KEYCODE_F1))
 		{
 			m_displayImguiInfo = !m_displayImguiInfo;
+		}
+
+		if(g_inputSystem->WasKeyJustPressed('H'))
+		{
+			s_isHUDHidden = !s_isHUDHidden;
+		}
+
+		if(g_inputSystem->WasKeyJustPressed('L'))
+		{
+			g_enableSmoothLighting = !g_enableSmoothLighting;
+			s_world->MarkAllActiveChunksDirty();
 		}
 	
 		if(g_inputSystem->WasKeyJustPressed(KEYCODE_ESC))
@@ -1021,11 +1044,17 @@ bool Game::ShowEntityDebugs()
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+bool Game::IsHUDHidden()
+{
+	return s_isHUDHidden;
+}
+
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Game::Event_AddGlowstone(EventArgs& args)
 {
 	int itemCount = args.GetValue("count", 64);
 
-	unsigned char glowstoneType = BlockDefinition::GetBlockDefinitionIndex("Glowstone");
+	unsigned char glowstoneType = g_blockTypes.m_glowstone;
 	g_theApp->m_game->m_playerEntity->m_inventory->AddItemToInventory(glowstoneType, itemCount);
 	
 	return false;

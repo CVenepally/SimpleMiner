@@ -411,17 +411,17 @@ void Player::SwitchBlockType()
 {
 	if(g_inputSystem->WasKeyJustPressed('1'))
 	{
-		m_blockTypeToPlace = BlockDefinition::GetBlockDefinitionIndex("Glowstone");
+		m_blockTypeToPlace = g_blockTypes.m_glowstone;
 	}
 
 	if(g_inputSystem->WasKeyJustPressed('2'))
 	{
-		m_blockTypeToPlace = BlockDefinition::GetBlockDefinitionIndex("Cobblestone");
+		m_blockTypeToPlace = g_blockTypes.m_cobblestone;
 	}
 
 	if(g_inputSystem->WasKeyJustPressed('3'))
 	{
-		m_blockTypeToPlace = BlockDefinition::GetBlockDefinitionIndex("ChiseledBrick");
+		m_blockTypeToPlace = g_blockTypes.m_chiseledBrick;
 	}
 }
 

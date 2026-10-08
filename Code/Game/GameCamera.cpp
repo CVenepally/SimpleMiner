@@ -71,7 +71,7 @@ void GameCamera::Render()
 
 	Player* player = dynamic_cast<Player*>(m_followingEntity);
 	
-	if(player && player->m_rayResult.m_didImpact)
+	if(player && player->m_rayResult.m_didImpact && !Game::IsHUDHidden())
 	{
 		std::vector<Vertex_PCU> verts;
 		AddVertsForHitSurface(verts);
@@ -108,6 +108,11 @@ void GameCamera::KeyboardControls(float deltaSeconds)
 	if(g_inputSystem->WasKeyJustPressed('C'))
 	{
 		SwitchCameraModes();
+	}
+
+	if(g_inputSystem->WasKeyJustPressed('F'))
+	{
+		m_isFlythroughEnabled = !m_isFlythroughEnabled;
 	}
 
 	if(g_inputSystem->WasKeyJustPressed('V'))
@@ -210,7 +215,7 @@ void GameCamera::MovementControls(float deltaSeconds)
 		bool wasInputPressed = false;
 		Vec3 intendedDirection = Vec3::ZERO;
 
-		if(g_inputSystem->IsKeyDown('W'))
+		if(g_inputSystem->IsKeyDown('W') || m_isFlythroughEnabled)
 		{
 			intendedDirection += fwd_2DPlane;
 			wasInputPressed = true;
@@ -255,15 +260,12 @@ void GameCamera::MovementControls(float deltaSeconds)
 			}
 		}
 
+		Vec3 moveDirection = Vec3::ZERO;
 		if(wasInputPressed)
 		{
-			Vec3 dir = intendedDirection.GetNormalized();
-			m_followingEntity->MoveInDirection(dir * moveSpeed, didJump);
+			moveDirection = intendedDirection.GetNormalized() * moveSpeed;
 		}
-		else if(didJump)
-		{
-			m_followingEntity->MoveInDirection(Vec3::ZERO, true);
-		}		
+		m_followingEntity->MoveInDirection(moveDirection, didJump);
 		
 		if(m_cameraMode != CAMERA_INDEPENDANT)
 		{
@@ -278,6 +280,11 @@ void GameCamera::MovementControls(float deltaSeconds)
 	}
 	else
 	{
+		if(m_followingEntity)
+		{
+			m_followingEntity->MoveInDirection(Vec3::ZERO, false);
+		}
+
 		m_camera.m_orientation.m_yawDegrees -= g_inputSystem->GetCursorClientDelta().x * mouseSensitivity;
 		m_camera.m_orientation.m_pitchDegrees += g_inputSystem->GetCursorClientDelta().y * mouseSensitivity;
 
@@ -296,7 +303,7 @@ void GameCamera::MovementControls(float deltaSeconds)
 			leftVector = Vec3(leftVector.x, leftVector.y, 0.f).GetNormalized();
 		}
 
-		if(g_inputSystem->IsKeyDown('W'))
+		if(g_inputSystem->IsKeyDown('W') || m_isFlythroughEnabled)
 		{
 			m_camera.m_position += fwdVector * moveSpeed * deltaSeconds;
 		}
@@ -392,6 +399,21 @@ void GameCamera::AddVertsForHitSurface(std::vector<Vertex_PCU>& verts)
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void GameCamera::SwitchCameraModes()
 {
+	bool wasFollowingEntity = m_cameraMode == CAMERA_FIRST_PERSON || m_cameraMode == CAMERA_THIRD_PERSON;
+
 	m_cameraMode = static_cast<CameraMode>((m_cameraMode + 1) % (CAMERA_COUNT));
+
+	bool isFollowingEntity = m_cameraMode == CAMERA_FIRST_PERSON || m_cameraMode == CAMERA_THIRD_PERSON;
+
+	if(!wasFollowingEntity && isFollowingEntity && m_followingEntity)
+	{
+		EulerAngles cameraRotation = m_camera.m_orientation;
+		cameraRotation.m_rollDegrees = 0.f;
+
+		m_followingEntity->SetPosition(m_camera.m_position - Vec3::UP * m_followingEntity->GetEyeHeight());
+		m_followingEntity->SetRotation(cameraRotation);
+		m_followingEntity->m_currentVelocity		= Vec3::ZERO;
+		m_followingEntity->m_currentAcceleration	= Vec3::ZERO;
+	}
 }
 
